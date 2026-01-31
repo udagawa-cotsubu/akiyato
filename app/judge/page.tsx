@@ -46,7 +46,6 @@ import { SURROUNDING_ENV_OPTIONS } from "@/lib/types/property";
 import { normalizeHalfWidthDigits } from "@/lib/utils";
 import { runJudge } from "@/lib/actions/judge";
 import { fetchAreaProfile, fetchPriceFeedback } from "@/lib/actions/ai";
-import { create as createJudgement } from "@/lib/repositories/judgementsRepository";
 import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository";
 import { OPENAI_LATEST_MODEL } from "@/lib/types/gptSettings";
 import type { PromptSnapshot } from "@/lib/types/judgement";
@@ -95,6 +94,7 @@ export default function JudgePage() {
           "希望価格の妥当性・住所の特徴を取得できませんでした。.env.local の OPENAI_API_KEY を確認し、開発サーバー（npm run dev）を再起動してください。"
         );
       }
+      const { create: createJudgement } = await import("@/lib/repositories/judgementsRepository");
       const record = await createJudgement({
         input,
         output,
