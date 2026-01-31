@@ -113,7 +113,7 @@ export function propertyInputToFormValues(
     expected_rent_yen: toYenStr(input.expected_rent_yen),
     estimated_renovation_yen: toYenStr(input.estimated_renovation_yen),
     desired_sale_price_yen: toYenStr(input.desired_sale_price_yen),
-  };
+  } as z.infer<typeof propertyInputSchema>;
 }
 
 export type PropertyInputSchema = z.infer<typeof propertyInputSchema>;
