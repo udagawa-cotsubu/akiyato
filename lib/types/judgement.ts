@@ -15,9 +15,27 @@ export interface JudgementResult {
   verdict: Verdict;
   confidence: number;
   reasons: string[];
+  /** 低評価ポイント（要改善・注意すべき点の箇条書き）。既存データ用に optional */
+  low_points?: string[];
   missing_checks: string[];
   risks: JudgementRisk[];
   recommended_next_actions: string[];
+}
+
+/** 入力住所に基づくエリアの特徴・ポテンシャル（GPTで周辺状況を踏まえて生成） */
+export interface AreaProfile {
+  /** エリア概要・周辺状況・特徴・ポテンシャル（Markdown可） */
+  content: string;
+  /** Web検索（Serper）を併用した場合 true */
+  used_web_search?: boolean;
+}
+
+/** 希望売却価格の妥当性フィードバック（GPTで周辺相場等を踏まえて生成） */
+export interface PriceFeedback {
+  /** 妥当性の結論（例: 妥当 / やや高め / 要検討） */
+  verdict: string;
+  /** 理由・根拠（Markdown可） */
+  reasoning: string;
 }
 
 export interface PromptSnapshot {
@@ -38,4 +56,8 @@ export interface JudgementRecord {
   prompt_snapshot: PromptSnapshot;
   status: JudgementRecordStatus;
   error_message?: string;
+  /** 住所に基づくエリアの特徴・ポテンシャル（GPT生成） */
+  area_profile?: AreaProfile | null;
+  /** 希望価格の妥当性フィードバック（GPT生成） */
+  price_feedback?: PriceFeedback | null;
 }

@@ -123,3 +123,42 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ユーザー画面（/judge, /judge/thanks）: 明るい背景・濃い文字で視認性を確保 */
+.judge-user-screen {
+  --background: oklch(0.985 0.002 247);
+  --foreground: oklch(0.2 0.02 260);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 260);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 260);
+  --muted: oklch(0.96 0.005 247);
+  --muted-foreground: oklch(0.4 0.02 260);
+  --border: oklch(0.9 0.01 247);
+  --input: oklch(0.92 0.01 247);
+  --ring: oklch(0.55 0.15 260);
+  --primary: oklch(0.35 0.15 260);
+  --primary-foreground: oklch(0.99 0 0);
+  font-size: 16px;
+}
+
+.judge-user-screen input,
+.judge-user-screen textarea,
+.judge-user-screen label,
+.judge-user-screen button,
+.judge-user-screen [data-slot="select-trigger"] {
+  font-size: 1rem;
+}
+
+.judge-user-screen .text-sm {
+  font-size: 0.9375rem;
+}
+
+.judge-user-screen [data-slot="accordion-trigger"] {
+  font-size: 1rem;
+}
+
+.judge-user-screen [data-slot="form-item"] label,
+.judge-user-screen .font-medium {
+  font-size: 1rem;
+}

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LayoutDashboardIcon, SettingsIcon } from "lucide-react";
+import { LayoutDashboardIcon, PlugIcon } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "管理",
@@ -8,8 +8,8 @@ export const metadata: Metadata = {
 };
 
 const navItems = [
-  { href: "/admin/gpt-settings", label: "GPT接続情報管理", icon: SettingsIcon },
   { href: "/admin/judgements", label: "判定結果管理", icon: LayoutDashboardIcon },
+  { href: "/admin/api-check", label: "API接続チェック", icon: PlugIcon },
 ] as const;
 
 export default function AdminLayout({

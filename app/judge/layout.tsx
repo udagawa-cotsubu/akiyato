@@ -8,5 +8,9 @@ export const metadata: Metadata = {
 export default function JudgeLayout({
   children,
 }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <div className="judge-user-screen min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+      {children}
+    </div>
+  );
 }

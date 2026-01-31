@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import {
   Accordion,
@@ -19,11 +20,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import type { PropertyInput } from "@/lib/types/property";
+import type {
+  PropertyInput,
+  TiltType,
+  BuildingLegalStatus,
+  RiskLevel,
+  StructureType,
+  WaterType,
+  SewageType,
+  GasType,
+} from "@/lib/types/property";
 import type { JudgementRecord } from "@/lib/types/judgement";
+import { fetchAreaProfile, fetchPriceFeedback } from "@/lib/actions/ai";
 import { getById, create as createJudgement, deleteRecord } from "@/lib/repositories/judgementsRepository";
 import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository";
-import { judgeWithStub } from "@/lib/judge/judgeWithStub";
+import { runJudge } from "@/lib/actions/judge";
+import { OPENAI_LATEST_MODEL } from "@/lib/types/gptSettings";
 import type { PromptSnapshot } from "@/lib/types/judgement";
 
 function formatDate(iso: string): string {
@@ -34,6 +46,81 @@ function formatDate(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+const TILT_LABELS: Record<TiltType, string> = {
+  NONE: "なし",
+  SLIGHT: "軽微",
+  YES: "あり",
+  NEED_CHECK: "要調査",
+};
+
+function tiltLabel(tilt: TiltType | undefined): string {
+  return tilt ? TILT_LABELS[tilt] ?? "—" : "—";
+}
+
+const BUILDING_LEGAL_LABELS: Record<BuildingLegalStatus, string> = {
+  CONFIRMED: "建築確認・検査済が確認できた",
+  LIKELY_OK: "たぶん問題なさそう（未確認）",
+  UNCONFIRMED: "不明",
+};
+
+const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
+  LOW: "低",
+  MEDIUM: "中",
+  HIGH: "高",
+  UNKNOWN: "不明",
+};
+
+function buildingLegalLabel(v: BuildingLegalStatus | undefined): string {
+  return v ? BUILDING_LEGAL_LABELS[v] ?? "—" : "—";
+}
+
+function riskLevelLabel(v: RiskLevel | undefined): string {
+  return v ? RISK_LEVEL_LABELS[v] ?? "—" : "—";
+}
+
+const STRUCTURE_LABELS: Record<StructureType, string> = {
+  WOOD: "木造",
+  LIGHT_STEEL: "軽量鉄骨",
+  RC: "RC",
+  OTHER: "その他",
+};
+
+const WATER_LABELS: Record<WaterType, string> = {
+  PUBLIC: "水道",
+  WELL: "井戸",
+  OTHER: "その他",
+};
+
+const SEWAGE_LABELS: Record<SewageType, string> = {
+  SEWER: "下水道",
+  SEPTIC: "浄化槽",
+  PIT: "汲み取り",
+  OTHER: "その他",
+};
+
+const GAS_LABELS: Record<GasType, string> = {
+  CITY: "都市ガス",
+  LP: "LP",
+  ALL_ELECTRIC: "オール電化",
+  OTHER: "その他",
+};
+
+function structureLabel(v: StructureType | undefined): string {
+  return v ? STRUCTURE_LABELS[v] ?? "—" : "—";
+}
+
+function waterLabel(v: WaterType | undefined): string {
+  return v ? WATER_LABELS[v] ?? "—" : "—";
+}
+
+function sewageLabel(v: SewageType | undefined): string {
+  return v ? SEWAGE_LABELS[v] ?? "—" : "—";
+}
+
+function gasLabel(v: GasType | undefined): string {
+  return v ? GAS_LABELS[v] ?? "—" : "—";
 }
 
 function InputSection({
@@ -67,51 +154,92 @@ function InputDisplay({ input }: { input: PropertyInput }) {
     <div className="space-y-4">
       <InputSection title="A. 物件基本">
         <p>物件名: {input.property_name || "—"}</p>
-        <p>住所: {input.address || "—"}</p>
-        <p>エリア: {input.area || "—"}</p>
+        <p>住所（町名まで可）: {input.address || "—"}</p>
       </InputSection>
-      <InputSection title="B. 面積">
+      <InputSection title="B. 面積・間取り">
         <p>土地: {input.land_area_m2} ㎡ / 建物: {input.building_area_m2} ㎡</p>
+        <p>間取り: {input.layout ?? "—"}</p>
+        <p>階数: {input.floors ?? "—"}</p>
       </InputSection>
       <InputSection title="C. 立地・駐車場">
-        <p>最寄: {input.nearest_access || "—"}</p>
+        <p>最寄駅（徒歩何分か）: {input.nearest_access || "—"}</p>
+        <p>周辺環境: {input.surrounding_env ?? "—"}</p>
         <p>駐車場: {input.parking === "ON_SITE" ? "敷地内あり" : "なし"}</p>
         {input.monthly_parking_fee_yen != null && (
           <p>月額駐車料: {input.monthly_parking_fee_yen} 円</p>
         )}
+        <p>接道: {input.road_access ?? "—"}</p>
       </InputSection>
       <InputSection title="D. 即NG判定">
-        <p>再建築不可: {input.ng_rebuild_not_allowed ? "YES" : "NO"}</p>
-        <p>接道義務未達: {input.ng_road_access_fail ? "YES" : "NO"}</p>
-        <p>雨漏り原因不明: {input.ng_unknown_leak ? "YES" : "NO"}</p>
-        <p>構造腐朽/傾き: {input.ng_structure_severe ? "YES" : "NO"}</p>
-        <p>擁壁是正不可: {input.ng_retaining_wall_unfixable ? "YES" : "NO"}</p>
-        <p>近隣トラブル: {input.ng_neighbor_trouble ? "YES" : "NO"}</p>
-        <p>ローン不可両方: {input.loan_impossible_both}</p>
+        <p>再建築不可: {input.ng_rebuild_not_allowed ? "はい" : "いいえ"}</p>
+        <p>接道義務未達: {input.ng_road_access_fail ? "はい" : "いいえ"}</p>
+        <p>雨漏り原因不明: {input.ng_unknown_leak ? "はい" : "いいえ"}</p>
+        <p>構造腐朽/傾き: {input.ng_structure_severe ? "はい" : "いいえ"}</p>
+        <p>擁壁是正不可: {input.ng_retaining_wall_unfixable ? "はい" : "いいえ"}</p>
+        <p>近隣トラブル: {input.ng_neighbor_trouble ? "はい" : "いいえ"}</p>
       </InputSection>
-      <InputSection title="E. 建物・インフラ">
+      <InputSection title="E. 法務・権利関係">
+        <p>建築確認・検査済: {buildingLegalLabel((input as PropertyInput & { building_legal_status?: BuildingLegalStatus }).building_legal_status)}</p>
+        <p>インスペ実施可能: {(input as PropertyInput & { inspection_available?: boolean }).inspection_available ? "できる" : "できない"}</p>
+        <p>違反建築/既存不適格の懸念: {riskLevelLabel((input as PropertyInput & { nonconformity_risk?: RiskLevel }).nonconformity_risk)}</p>
+        <p>権利関係の懸念: {riskLevelLabel((input as PropertyInput & { title_rights_risk?: RiskLevel }).title_rights_risk)}</p>
+      </InputSection>
+      <InputSection title="F. 建物・インフラ">
         <p>築年: {input.built_year}</p>
         <p>新耐震: {input.shin_taishin ? "はい" : "いいえ"}</p>
-        <p>構造: {input.structure_type}</p>
-        <p>基礎: {input.foundation || "—"}</p>
-        <p>上水: {input.water} / 下水: {input.sewage} / ガス: {input.gas}</p>
+        <p>構造: {structureLabel(input.structure_type)}</p>
+        <p>雨漏り有無: {input.water_leak ? "有" : "無"}</p>
+        <p>傾き: {tiltLabel(input.tilt)}</p>
+        <p>上水: {waterLabel(input.water)} / 下水: {sewageLabel(input.sewage)} / ガス: {gasLabel(input.gas)}</p>
+        <p>電気: {input.electricity ?? "—"}</p>
         <p>状態メモ: {input.condition_note || "—"}</p>
       </InputSection>
-      <InputSection title="F. 想定賃貸条件">
+      <InputSection title="G. 工事・回転">
+        <p>
+          ◯想定リフォーム費:{" "}
+          {input.estimated_renovation_yen != null
+            ? `${(input.estimated_renovation_yen / 10000).toLocaleString()}万円`
+            : "—"}
+        </p>
+        <div>
+          <p className="mb-1">◯工事内容（チェックボックス）</p>
+          <ul className="list-inside space-y-0.5 text-sm">
+            {input.construction_items?.water_system && (
+              <li>水回り交換（キッチン・浴室・トイレ）</li>
+            )}
+            {input.construction_items?.wallpaper_full && (
+              <li>内装クロス全面</li>
+            )}
+            {input.construction_items?.floor_partial && (
+              <li>床一部張替え</li>
+            )}
+            {input.construction_items?.exterior_partial && (
+              <li>外壁部分補修</li>
+            )}
+            {!input.construction_items?.water_system &&
+              !input.construction_items?.wallpaper_full &&
+              !input.construction_items?.floor_partial &&
+              !input.construction_items?.exterior_partial && (
+                <li className="text-muted-foreground">—</li>
+              )}
+          </ul>
+        </div>
+        <p>
+          ◯希望売却価格:{" "}
+          {input.desired_sale_price_yen != null
+            ? `${(input.desired_sale_price_yen / 10000).toLocaleString()}万円`
+            : "—"}
+        </p>
+      </InputSection>
+      <InputSection title="H. 想定賃貸条件">
         {input.expected_rent_yen != null && (
-          <p>想定賃料: {input.expected_rent_yen} 円</p>
+          <p>想定賃料: {input.expected_rent_yen / 10000} 万円</p>
         )}
         <p>ペット可: {input.pet_allowed ? "はい" : "いいえ"}</p>
         {input.pet_note && <p>ペット備考: {input.pet_note}</p>}
         <p>ターゲット: {targetLabels || "—"}</p>
       </InputSection>
-      <InputSection title="G. 工事・回転">
-        <p>90日以内: {input.within_90_days ? "はい" : "いいえ"}</p>
-        <p>MIN仕様成立: {input.min_spec_ok ? "はい" : "いいえ"}</p>
-        <p>S+一部可能: {input.s_plus_partial_ok ? "はい" : "いいえ"}</p>
-        <p>説明不要まで再生可: {input.can_restore_no_explain ? "はい" : "いいえ"}</p>
-      </InputSection>
-      <InputSection title="H. 補足">
+      <InputSection title="I. 補足">
         <p>{input.remarks || "—"}</p>
       </InputSection>
     </div>
@@ -139,27 +267,28 @@ export default function JudgementDetailPage() {
     setReJudging(true);
     try {
       const settings = await getGptSettings();
-      const output = judgeWithStub(record.input, settings);
-      const prompt_snapshot: PromptSnapshot = settings
-        ? {
-            name: settings.prompt_name,
-            version: settings.prompt_version,
-            content: settings.prompt_content,
-            model: settings.model,
-            temperature: settings.temperature,
-          }
-        : {
-            name: "",
-            version: "",
-            content: "",
-            model: "",
-            temperature: 0,
-          };
+      const output = await runJudge(record.input, settings);
+      const prompt_snapshot: PromptSnapshot = {
+        name: settings.prompt_name,
+        version: settings.prompt_version,
+        content: settings.prompt_content,
+        model: OPENAI_LATEST_MODEL,
+        temperature: settings.temperature,
+      };
+      const [area_profile, price_feedback] = await Promise.all([
+        fetchAreaProfile(record.input.address),
+        fetchPriceFeedback(
+          record.input.address,
+          record.input.desired_sale_price_yen
+        ),
+      ]);
       const newRecord = await createJudgement({
         input: record.input,
         output,
         prompt_snapshot,
         status: "COMPLETED",
+        area_profile: area_profile ?? null,
+        price_feedback: price_feedback ?? null,
       });
       toast.success("再判定を保存しました");
       router.push(`/admin/judgements/${newRecord.id}`);
@@ -256,13 +385,32 @@ export default function JudgementDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {output.reasons.length > 0 && (
-                <div>
+                <div className="prose prose-sm max-w-none dark:prose-invert">
                   <h4 className="mb-1 text-sm font-medium">判定理由</h4>
-                  <ul className="list-inside list-disc text-sm">
-                    {output.reasons.map((r, i) => (
-                      <li key={i}>{r}</li>
-                    ))}
-                  </ul>
+                  <ReactMarkdown
+                    components={{
+                      h2: ({ children }) => (
+                        <h2 className="mb-2 mt-4 text-base font-semibold first:mt-0">
+                          {children}
+                        </h2>
+                      ),
+                      h3: ({ children }) => (
+                        <h3 className="mb-1.5 mt-3 text-sm font-medium">
+                          {children}
+                        </h3>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="list-inside list-disc space-y-0.5 text-sm">
+                          {children}
+                        </ul>
+                      ),
+                      p: ({ children }) => (
+                        <p className="mb-1 text-sm">{children}</p>
+                      ),
+                    }}
+                  >
+                    {output.reasons.join("\n")}
+                  </ReactMarkdown>
                 </div>
               )}
               {output.missing_checks.length > 0 && (
@@ -288,6 +436,16 @@ export default function JudgementDetailPage() {
                   </ul>
                 </div>
               )}
+              {(output.low_points?.length ?? 0) > 0 && (
+                <div>
+                  <h4 className="mb-1 text-sm font-medium">低評価ポイント</h4>
+                  <ul className="list-inside list-disc text-sm">
+                    {(output.low_points ?? []).map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {output.recommended_next_actions.length > 0 && (
                 <div>
                   <h4 className="mb-1 text-sm font-medium">推奨アクション</h4>
@@ -298,8 +456,58 @@ export default function JudgementDetailPage() {
                   </ul>
                 </div>
               )}
+              {record.price_feedback && (
+                <div>
+                  <h4 className="mb-1 text-sm font-medium">希望価格の妥当性</h4>
+                  <p className="mb-1 font-medium text-sm">
+                    {record.price_feedback.verdict}
+                  </p>
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => (
+                          <p className="mb-1 text-sm">{children}</p>
+                        ),
+                      }}
+                    >
+                      {record.price_feedback.reasoning}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {record.area_profile && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  住所の特徴
+                  {record.area_profile.used_web_search
+                    ? "（Web検索 + AI により要約）"
+                    : "（AI により生成）"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }) => (
+                        <p className="mb-1 text-sm">{children}</p>
+                      ),
+                      ul: ({ children }) => (
+                        <ul className="list-inside list-disc text-sm">
+                          {children}
+                        </ul>
+                      ),
+                    }}
+                  >
+                    {record.area_profile.content}
+                  </ReactMarkdown>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
