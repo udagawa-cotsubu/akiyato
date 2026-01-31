@@ -1,0 +1,88 @@
+import { z } from "zod";
+import type { PropertyInput, TargetSegments } from "@/lib/types/property";
+
+const targetSegmentsSchema = z.object({
+  single: z.boolean(),
+  couple: z.boolean(),
+  family: z.boolean(),
+  investor: z.boolean(),
+});
+
+export const propertyInputSchema = z.object({
+  property_name: z.string(),
+  address: z.string(),
+  area: z.string(),
+  land_area_m2: z.number(),
+  building_area_m2: z.number(),
+  nearest_access: z.string(),
+  parking: z.enum(["ON_SITE", "NONE"]),
+  monthly_parking_fee_yen: z.number().optional(),
+  ng_rebuild_not_allowed: z.boolean(),
+  ng_road_access_fail: z.boolean(),
+  ng_unknown_leak: z.boolean(),
+  ng_structure_severe: z.boolean(),
+  ng_retaining_wall_unfixable: z.boolean(),
+  ng_neighbor_trouble: z.boolean(),
+  loan_impossible_both: z.enum(["YES", "NO", "UNKNOWN"]),
+  built_year: z.number(),
+  shin_taishin: z.boolean(),
+  structure_type: z.enum(["WOOD", "LIGHT_STEEL", "RC", "OTHER"]),
+  foundation: z.string(),
+  water: z.enum(["PUBLIC", "WELL", "OTHER"]),
+  sewage: z.enum(["SEWER", "SEPTIC", "PIT", "OTHER"]),
+  gas: z.enum(["CITY", "LP", "ALL_ELECTRIC", "OTHER"]),
+  condition_note: z.string(),
+  expected_rent_yen: z.number().optional(),
+  pet_allowed: z.boolean(),
+  pet_note: z.string().optional(),
+  target_segments: targetSegmentsSchema,
+  within_90_days: z.boolean(),
+  min_spec_ok: z.boolean(),
+  s_plus_partial_ok: z.boolean(),
+  can_restore_no_explain: z.boolean(),
+  remarks: z.string(),
+});
+
+export type PropertyInputSchema = z.infer<typeof propertyInputSchema>;
+
+export const defaultTargetSegments: TargetSegments = {
+  single: false,
+  couple: false,
+  family: false,
+  investor: false,
+};
+
+export const defaultPropertyInput: PropertyInput = {
+  property_name: "",
+  address: "",
+  area: "",
+  land_area_m2: 0,
+  building_area_m2: 0,
+  nearest_access: "",
+  parking: "NONE",
+  monthly_parking_fee_yen: undefined,
+  ng_rebuild_not_allowed: false,
+  ng_road_access_fail: false,
+  ng_unknown_leak: false,
+  ng_structure_severe: false,
+  ng_retaining_wall_unfixable: false,
+  ng_neighbor_trouble: false,
+  loan_impossible_both: "UNKNOWN",
+  built_year: new Date().getFullYear(),
+  shin_taishin: false,
+  structure_type: "WOOD",
+  foundation: "",
+  water: "PUBLIC",
+  sewage: "SEWER",
+  gas: "CITY",
+  condition_note: "",
+  expected_rent_yen: undefined,
+  pet_allowed: false,
+  pet_note: undefined,
+  target_segments: defaultTargetSegments,
+  within_90_days: false,
+  min_spec_ok: false,
+  s_plus_partial_ok: false,
+  can_restore_no_explain: false,
+  remarks: "",
+};
