@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
@@ -46,7 +46,7 @@ import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository"
 import { OPENAI_LATEST_MODEL } from "@/lib/types/gptSettings";
 import type { PromptSnapshot } from "@/lib/types/judgement";
 
-export default function JudgePage() {
+function JudgePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1143,5 +1143,19 @@ export default function JudgePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function JudgePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <p className="text-muted-foreground">読み込み中…</p>
+        </div>
+      }
+    >
+      <JudgePageContent />
+    </Suspense>
   );
 }
