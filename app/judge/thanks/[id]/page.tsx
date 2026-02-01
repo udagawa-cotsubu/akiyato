@@ -79,6 +79,7 @@ export default function JudgeThanksPage() {
             area_profile={record.area_profile}
             price_feedback={record.price_feedback}
             surrounding_rent_market={record.surrounding_rent_market}
+            market_data={record.market_data}
           />
 
           <p className="text-center text-muted-foreground">

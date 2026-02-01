@@ -20,6 +20,7 @@ const constructionItemsSchema = z.object({
 
 export const propertyInputSchema = z.object({
   property_name: z.string(),
+  postal_code: z.string().optional(),
   address: z.string(),
   land_area_m2: halfWidthDigitsString,
   building_area_m2: halfWidthDigitsString,
@@ -38,7 +39,7 @@ export const propertyInputSchema = z.object({
   loan_investment: z.enum(["OK", "NG"]),
   // E. 法務・権利関係
   building_legal_status: z.enum(["YES", "NO", "UNKNOWN"]),
-  inspection_status: z.enum(["DONE", "NONE", "UNKNOWN"]),
+  inspection_status: z.enum(["DONE", "NONE", "UNKNOWN", "NEW_TAISHIN"]),
   nonconformity_risk: z.enum(["YES", "NO", "UNKNOWN"]),
   nonconformity_note: z.string().optional(),
   title_rights_risk: z.enum(["YES", "NO", "UNKNOWN"]),
@@ -119,6 +120,7 @@ export const defaultConstructionItems: ConstructionItems = {
 /** フォームの初期値（数値項目は空文字でデフォルト0なし） */
 export const defaultPropertyInput: z.infer<typeof propertyInputSchema> = {
   property_name: "",
+  postal_code: "",
   address: "",
   land_area_m2: "",
   building_area_m2: "",

@@ -76,6 +76,7 @@ function inspectionLabel(
   if (v === "DONE") return "インスペクション済み";
   if (v === "NONE") return "無し";
   if (v === "UNKNOWN") return "不明";
+  if (v === "NEW_TAISHIN") return "新耐震";
   if (typeof v === "boolean") return v ? "できる" : "できない";
   return "—";
 }
@@ -186,6 +187,9 @@ function InputDisplay({ input }: { input: PropertyInput }) {
     <div className="space-y-4">
       <InputSection title="A. 物件基本">
         <p>物件名: {input.property_name || "—"}</p>
+        {(input as { postal_code?: string }).postal_code && (
+          <p>郵便番号: {(input as { postal_code?: string }).postal_code}</p>
+        )}
         <p>住所（町名まで可）: {input.address || "—"}</p>
       </InputSection>
       <InputSection title="B. 面積・間取り">

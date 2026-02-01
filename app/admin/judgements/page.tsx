@@ -62,11 +62,14 @@ export default function JudgementsListPage() {
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      r = r.filter(
-        (rec) =>
+      r = r.filter((rec) => {
+        const postal = (rec.input as { postal_code?: string }).postal_code ?? "";
+        return (
           rec.input.property_name.toLowerCase().includes(q) ||
-          rec.input.address.toLowerCase().includes(q)
-      );
+          rec.input.address.toLowerCase().includes(q) ||
+          postal.toLowerCase().includes(q)
+        );
+      });
     }
     return r;
   }, [records, search, verdictFilter]);

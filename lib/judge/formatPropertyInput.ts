@@ -36,6 +36,9 @@ export function formatPropertyInputForPrompt(input: InputWithLegacy): string {
 
   lines.push("## A. 物件基本");
   add("物件名", input.property_name);
+  if ((input as { postal_code?: string }).postal_code) {
+    add("郵便番号", (input as { postal_code?: string }).postal_code);
+  }
   add("住所", input.address);
 
   lines.push("\n## B. 面積・間取り");
@@ -64,7 +67,16 @@ export function formatPropertyInputForPrompt(input: InputWithLegacy): string {
   const titleR = input.title_rights_risk;
   lines.push("\n## E. 法務・権利関係");
   add("建築確認・検査済", bLegal === "YES" ? "あり" : bLegal === "NO" ? "なし" : "不明");
-  add("インスペクション", insp === "DONE" ? "済み" : insp === "NONE" ? "無し" : "不明");
+  add(
+    "インスペクション",
+    insp === "DONE"
+      ? "済み"
+      : insp === "NONE"
+        ? "無し"
+        : insp === "NEW_TAISHIN"
+          ? "新耐震（インスペ未実施でも可）"
+          : "不明"
+  );
   add("違反建築・既存不適格の懸念", noncon === "YES" ? "あり" : noncon === "NO" ? "なし" : "不明");
   add("違反建築・既存不適格（コメント）", input.nonconformity_note);
   add("権利関係の懸念", titleR === "YES" ? "あり" : titleR === "NO" ? "なし" : "不明");

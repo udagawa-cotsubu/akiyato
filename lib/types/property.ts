@@ -36,8 +36,8 @@ export type TiltType = "NONE" | "SLIGHT" | "YES" | "NEED_CHECK";
 /** 建築確認・検査済: あり／なし／不明 */
 export type BuildingLegalStatus = "YES" | "NO" | "UNKNOWN";
 
-/** インスペクション: 済み／無し／不明 */
-export type InspectionStatus = "DONE" | "NONE" | "UNKNOWN";
+/** インスペクション: 済み／無し／不明／新耐震（未実施でも可） */
+export type InspectionStatus = "DONE" | "NONE" | "UNKNOWN" | "NEW_TAISHIN";
 
 /** あり／なし／不明（違反建築・権利関係など） */
 export type YesNoUnknown = "YES" | "NO" | "UNKNOWN";
@@ -62,6 +62,8 @@ export interface ConstructionItems {
 export interface PropertyInput {
   // A. 物件基本
   property_name: string;
+  /** 郵便番号（7桁入力で住所オートフィル用）。任意 */
+  postal_code?: string;
   address: string;
 
   // B. 面積・間取り

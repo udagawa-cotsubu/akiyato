@@ -40,7 +40,8 @@ import type { PropertyInput } from "@/lib/types/property";
 import { SURROUNDING_ENV_OPTIONS } from "@/lib/types/property";
 import { normalizeHalfWidthDigits, getTaishinLabelFromBuiltYear } from "@/lib/utils";
 import { runJudge } from "@/lib/actions/judge";
-import { fetchAreaProfile, fetchPriceFeedback, fetchSurroundingRentMarket } from "@/lib/actions/ai";
+import { fetchAreaProfile, fetchPriceFeedback, fetchSurroundingRentMarket, fetchNearestStation, fetchMarketData } from "@/lib/actions/ai";
+import { getAddressFromPostalCode } from "@/lib/actions/postal";
 import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository";
 import { OPENAI_LATEST_MODEL } from "@/lib/types/gptSettings";
 import type { PromptSnapshot } from "@/lib/types/judgement";
@@ -48,6 +49,8 @@ import type { PromptSnapshot } from "@/lib/types/judgement";
 export default function JudgePage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [postalLoading, setPostalLoading] = useState(false);
+  const [nearestLoading, setNearestLoading] = useState(false);
 
   const form = useForm<PropertyInputSchema>({
     resolver: zodResolver(propertyInputSchema),
@@ -80,10 +83,11 @@ export default function JudgePage() {
         model: OPENAI_LATEST_MODEL,
         temperature: settings.temperature,
       };
-      const [area_profile, price_feedback, surrounding_rent_market] = await Promise.all([
+      const [area_profile, price_feedback, surrounding_rent_market, market_data] = await Promise.all([
         fetchAreaProfile(input.address),
         fetchPriceFeedback(input.address, input.desired_sale_price_yen),
         fetchSurroundingRentMarket(input.address),
+        fetchMarketData(input.address),
       ]);
       if (area_profile == null && price_feedback == null && input.address?.trim()) {
         toast.error(
@@ -99,6 +103,7 @@ export default function JudgePage() {
         area_profile: area_profile ?? null,
         price_feedback: price_feedback ?? null,
         surrounding_rent_market: surrounding_rent_market ?? null,
+        market_data: market_data ?? null,
       });
       router.push(`/judge/thanks/${record.id}`);
     } catch (err) {
@@ -150,7 +155,7 @@ export default function JudgePage() {
             {/* A. 物件基本 */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>A. 物件基本</h2>
-              <div className={grid2}>
+              <div className="space-y-3">
                 <FormField
                   control={form.control}
                   name="property_name"
@@ -164,19 +169,57 @@ export default function JudgePage() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>住所（町名まで可）</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="住所（町名まで）" className="h-9" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className={grid2}>
+                  <FormField
+                    control={form.control}
+                    name="postal_code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>郵便番号</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="1234567（ハイフンなし）"
+                            className="h-9"
+                            maxLength={8}
+                            onChange={(e) => {
+                              const v = normalizeHalfWidthDigits(e.target.value).replace(/-/g, "");
+                              field.onChange(v.slice(0, 7));
+                            }}
+                            onBlur={async () => {
+                              const v = (field.value ?? "").replace(/\D/g, "");
+                              if (v.length !== 7) return;
+                              setPostalLoading(true);
+                              try {
+                                const addr = await getAddressFromPostalCode(v);
+                                if (addr) form.setValue("address", addr);
+                              } finally {
+                                setPostalLoading(false);
+                              }
+                            }}
+                          />
+                        </FormControl>
+                        {postalLoading && (
+                          <p className="text-xs text-muted-foreground">住所を取得中…</p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="address"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>住所（町名まで可）</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="郵便番号で自動入力 or 直接入力" className="h-9" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
             </section>
 
@@ -290,9 +333,32 @@ export default function JudgePage() {
                   name="nearest_access"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>最寄駅（徒歩何分か）</FormLabel>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <FormLabel className="shrink-0">最寄駅（徒歩何分か）</FormLabel>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          disabled={nearestLoading || !form.watch("address")?.trim()}
+                          onClick={async () => {
+                            const addr = form.getValues("address")?.trim();
+                            if (!addr) return;
+                            setNearestLoading(true);
+                            try {
+                              const result = await fetchNearestStation(addr);
+                              if (result) form.setValue("nearest_access", result);
+                              else toast.error("最寄駅の取得に失敗しました。");
+                            } finally {
+                              setNearestLoading(false);
+                            }
+                          }}
+                        >
+                          {nearestLoading ? "取得中…" : "最寄駅を自動取得"}
+                        </Button>
+                      </div>
                       <FormControl>
-                        <Input {...field} placeholder="例: 〇〇駅 徒歩5分" className="h-9" />
+                        <Input {...field} placeholder="例: 〇〇駅 徒歩5分（住所入力後に自動取得可）" className="h-9" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -547,6 +613,10 @@ export default function JudgePage() {
                             <div className="flex items-center space-x-2">
                               <RadioGroupItem value="UNKNOWN" id="insp-unk" />
                               <Label htmlFor="insp-unk">不明</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="NEW_TAISHIN" id="insp-new-taishin" />
+                              <Label htmlFor="insp-new-taishin">新耐震</Label>
                             </div>
                           </RadioGroup>
                         </FormControl>

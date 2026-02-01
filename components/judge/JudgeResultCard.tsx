@@ -5,6 +5,7 @@ import type {
   JudgementResult,
   AreaProfile,
   PriceFeedback,
+  MarketData,
 } from "@/lib/types/judgement";
 
 const mdComponents = {
@@ -27,12 +28,15 @@ export function JudgeResultCard({
   area_profile,
   price_feedback,
   surrounding_rent_market,
+  market_data,
 }: {
   result: JudgementResult;
   area_profile?: AreaProfile | null;
   price_feedback?: PriceFeedback | null;
   /** 周辺家賃相場・参考賃料（GPT+Web取得） */
   surrounding_rent_market?: string | null;
+  /** 地価・坪単価・周辺実売（GPT+Web取得） */
+  market_data?: MarketData | null;
 }) {
   const verdictVariant =
     result.verdict === "GO"
@@ -111,6 +115,22 @@ export function JudgeResultCard({
           <div>
             <h4 className="mb-1 text-sm font-medium">周辺家賃相場（参考）</h4>
             <p className="text-sm">{surrounding_rent_market}</p>
+          </div>
+        )}
+        {market_data && (market_data.land_price ?? market_data.price_per_tsubo ?? market_data.nearby_sales) && (
+          <div>
+            <h4 className="mb-1 text-sm font-medium">地価・坪単価・周辺実売（参考）</h4>
+            <div className="space-y-1 text-sm">
+              {market_data.land_price && (
+                <p><span className="font-medium">地価:</span> {market_data.land_price}</p>
+              )}
+              {market_data.price_per_tsubo && (
+                <p><span className="font-medium">坪単価:</span> {market_data.price_per_tsubo}</p>
+              )}
+              {market_data.nearby_sales && (
+                <p><span className="font-medium">周辺実売:</span> {market_data.nearby_sales}</p>
+              )}
+            </div>
           </div>
         )}
         {price_feedback && (

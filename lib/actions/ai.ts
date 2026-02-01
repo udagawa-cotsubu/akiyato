@@ -310,6 +310,80 @@ ${webContext ? "上記のWeb検索結果を踏まえつつ、" : ""}一般的な
 }
 
 /**
+ * 住所に基づき最寄駅・徒歩分数を取得（GPT + オプションでWeb検索）。
+ * 戻り値例: "〇〇駅 徒歩5分"
+ */
+export async function fetchNearestStation(address: string): Promise<string | null> {
+  if (!address?.trim()) return null;
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.error("[AI] OPENAI_API_KEY が設定されていません。");
+    return null;
+  }
+
+  const serperKey = process.env.SERPER_API_KEY?.trim();
+  let webContext = "";
+
+  if (serperKey) {
+    try {
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": serperKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          q: `${address} 最寄駅 徒歩`,
+          num: 5,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          organic?: { title?: string; snippet?: string }[];
+        };
+        const snippets = (data.organic ?? [])
+          .slice(0, 4)
+          .map((o) => `${o.title ?? ""}\n${o.snippet ?? ""}`)
+          .filter(Boolean);
+        if (snippets.length > 0) {
+          webContext =
+            "\n\n【参考：Web検索結果】\n" +
+            snippets.join("\n\n---\n\n");
+        }
+      }
+    } catch (serperErr) {
+      console.warn("[AI] 最寄駅のWeb検索に失敗しました。GPT のみで続行:", serperErr instanceof Error ? serperErr.message : serperErr);
+    }
+  }
+
+  try {
+    const prompt = `以下の住所について、最寄駅と徒歩分数を1行で答えてください。
+${webContext ? "上記のWeb検索結果を参考にしつつ、" : ""}「〇〇駅 徒歩△分」の形式でお願いします。複数ある場合は最も近い駅を1つだけ。
+
+住所: ${address}`;
+
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_LATEST_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "あなたは不動産・立地の専門家です。住所に基づき、最寄駅と徒歩分数を「〇〇駅 徒歩△分」の形式で簡潔に答えてください。",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.2,
+      max_tokens: 100,
+    });
+
+    const content = completion.choices[0]?.message?.content?.trim() ?? null;
+    return content || null;
+  } catch (err) {
+    console.error("[AI] 最寄駅の取得に失敗しました:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
  * 地価・坪単価・周辺戸建て売買相場を取得（GPT + Web検索）。
  * 国交省API利用可能後は、この関数内の取得ロジックのみAPI実装に差し替える。
  */
