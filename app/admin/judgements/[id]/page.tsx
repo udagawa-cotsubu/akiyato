@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import {
   Accordion,
   AccordionContent,
@@ -31,6 +32,7 @@ import type {
 import { getTaishinLabelFromBuiltYear } from "@/lib/utils";
 import type { JudgementRecord } from "@/lib/types/judgement";
 import { fetchAreaProfile, fetchPriceFeedback, fetchSurroundingRentMarket, fetchMarketData } from "@/lib/actions/ai";
+import { propertyInputToFormValues } from "@/lib/schemas/propertyInput";
 import { getById, create as createJudgement, deleteRecord } from "@/lib/repositories/judgementsRepository";
 import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository";
 import { runJudge } from "@/lib/actions/judge";
@@ -380,8 +382,30 @@ export default function JudgementDetailPage() {
         : "secondary";
   const verdictLabel = v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v;
 
+  /** ユーザー画面の判定フォームを別タブで開き、入力済み状態で表示する */
+  const openJudgeWithPrefill = () => {
+    if (!record) return;
+    const formValues = propertyInputToFormValues(record.input);
+    try {
+      const encoded = btoa(
+        unescape(encodeURIComponent(JSON.stringify(formValues)))
+      );
+      const url = `${window.location.origin}/judge?prefill=${encodeURIComponent(encoded)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      toast.error("再査定用URLの生成に失敗しました");
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {reJudging && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/90 backdrop-blur-sm">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" aria-hidden />
+          <p className="text-lg font-medium">現在計算中です</p>
+          <p className="text-muted-foreground text-sm">もうしばらくお待ちください</p>
+        </div>
+      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-xl font-semibold break-words">
@@ -391,7 +415,14 @@ export default function JudgementDetailPage() {
             {formatDate(record.created_at)}
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0 sm:flex-wrap">
+          <Button
+            variant="outline"
+            onClick={openJudgeWithPrefill}
+            disabled={reJudging || deleting}
+          >
+            一部変更して再査定
+          </Button>
           <Button
             variant="outline"
             onClick={handleReJudge}

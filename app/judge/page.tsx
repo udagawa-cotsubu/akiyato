@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -48,6 +48,7 @@ import type { PromptSnapshot } from "@/lib/types/judgement";
 
 export default function JudgePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [postalLoading, setPostalLoading] = useState(false);
   const [nearestLoading, setNearestLoading] = useState(false);
@@ -57,6 +58,7 @@ export default function JudgePage() {
     defaultValues: defaultPropertyInput,
   });
 
+  // sessionStorage からのプリフィル（同一タブからの遷移用）
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(JUDGE_PREFILL_KEY);
@@ -68,6 +70,20 @@ export default function JudgePage() {
       // ignore invalid or missing prefill
     }
   }, [form]);
+
+  // URL ?prefill= からのプリフィル（管理画面「一部変更して再査定」で別タブで開いた場合）
+  useEffect(() => {
+    const prefillEncoded = searchParams.get("prefill");
+    if (!prefillEncoded) return;
+    try {
+      const json = decodeURIComponent(escape(atob(prefillEncoded)));
+      const parsed = JSON.parse(json) as PropertyInputSchema;
+      form.reset(parsed);
+      router.replace("/judge", { scroll: false });
+    } catch {
+      // ignore invalid prefill
+    }
+  }, [searchParams, form, router]);
 
   const handleJudge = useCallback(async () => {
     const values = form.getValues();
