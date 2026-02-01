@@ -132,7 +132,7 @@ function JudgePageContent() {
 
   const sectionClass = "rounded-lg border bg-card p-4";
   const sectionTitleClass = "text-sm font-semibold text-muted-foreground mb-3";
-  const grid2 = "grid grid-cols-1 md:grid-cols-2 gap-3";
+  const grid2 = "grid grid-cols-1 md:grid-cols-2 gap-4";
   const radioRow = "flex flex-row flex-wrap gap-4";
 
   return (
@@ -167,11 +167,11 @@ function JudgePageContent() {
 
       <main className="mx-auto max-w-3xl px-4 pb-24 pt-4 text-base">
         <Form {...form}>
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* A. 物件基本 */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>A. 物件基本</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <FormField
                   control={form.control}
                   name="property_name"
@@ -343,7 +343,7 @@ function JudgePageContent() {
             {/* C. 立地・駐車場 */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>C. 立地・駐車場</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <FormField
                   control={form.control}
                   name="nearest_access"
@@ -483,7 +483,7 @@ function JudgePageContent() {
             {/* D. 即NG判定 */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>D. 即NG判定（いずれかが「はい」だと再販見送り）</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="space-y-2">
                   {(
                     [
@@ -574,7 +574,7 @@ function JudgePageContent() {
             {/* E. 法務・権利関係 */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>E. 法務・権利関係</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className={grid2}>
                   <FormField
                     control={form.control}
@@ -737,77 +737,83 @@ function JudgePageContent() {
             {/* F. 建物・インフラ */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>F. 建物・インフラ</h2>
-              <div className="space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <FormField
-                    control={form.control}
-                    name="built_year"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>築年</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="西暦で入力"
-                            className="h-9"
-                            {...field}
-                            onChange={(e) =>
-                              field.onChange(
-                                normalizeHalfWidthDigits(e.target.value)
-                              )
-                            }
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="structure_type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>構造</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 左: 築年 3 : 構造 1 */}
+                  <div className="grid grid-cols-1 md:grid-cols-[3fr_1fr] gap-4 min-w-0">
+                    <FormField
+                      control={form.control}
+                      name="built_year"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>築年</FormLabel>
                           <FormControl>
-                            <SelectTrigger className="h-9">
-                              <SelectValue />
-                            </SelectTrigger>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="西暦で入力"
+                              className="h-9"
+                              {...field}
+                              onChange={(e) =>
+                                field.onChange(
+                                  normalizeHalfWidthDigits(e.target.value)
+                                )
+                              }
+                            />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="WOOD">木造</SelectItem>
-                            <SelectItem value="LIGHT_STEEL">軽量鉄骨</SelectItem>
-                            <SelectItem value="RC">RC</SelectItem>
-                            <SelectItem value="OTHER">その他</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="foundation_type"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>基礎種別</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="選択" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="MAT">ベタ基礎</SelectItem>
-                            <SelectItem value="STRIP">布基礎</SelectItem>
-                            <SelectItem value="UNKNOWN">未確認</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="structure_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>構造</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="WOOD">木造</SelectItem>
+                              <SelectItem value="LIGHT_STEEL">軽量鉄骨</SelectItem>
+                              <SelectItem value="RC">RC</SelectItem>
+                              <SelectItem value="OTHER">その他</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  {/* 右: 基礎種別（左寄せ） */}
+                  <div className="md:justify-self-start min-w-0 w-full md:w-auto">
+                    <FormField
+                      control={form.control}
+                      name="foundation_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>基礎種別</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger className="h-9">
+                                <SelectValue placeholder="選択" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="MAT">ベタ基礎</SelectItem>
+                              <SelectItem value="STRIP">布基礎</SelectItem>
+                              <SelectItem value="UNKNOWN">未確認</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
                 <p className="text-muted-foreground text-xs">
                   耐震: {getTaishinLabelFromBuiltYear(form.watch("built_year") ? Number(form.watch("built_year")) : undefined)}
@@ -888,7 +894,7 @@ function JudgePageContent() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <FormField
                     control={form.control}
                     name="tilt"
@@ -1015,7 +1021,7 @@ function JudgePageContent() {
             {/* G. 工事・回転 */}
             <section className={sectionClass}>
               <h2 className={sectionTitleClass}>G. 工事・回転</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className={grid2}>
                   <FormField
                     control={form.control}
@@ -1029,7 +1035,7 @@ function JudgePageContent() {
                               type="text"
                               inputMode="numeric"
                               placeholder="300"
-                              className="h-9"
+                              className="h-9 w-24 min-w-0 shrink-0"
                               {...field}
                               onChange={(e) =>
                                 field.onChange(
@@ -1037,7 +1043,7 @@ function JudgePageContent() {
                                 )
                               }
                             />
-                            <span className="text-muted-foreground text-sm">万円</span>
+                            <span className="text-muted-foreground text-sm shrink-0">万円</span>
                           </div>
                         </FormControl>
                         <FormMessage />
@@ -1056,7 +1062,7 @@ function JudgePageContent() {
                               type="text"
                               inputMode="numeric"
                               placeholder="500"
-                              className="h-9"
+                              className="h-9 w-24 min-w-0 shrink-0"
                               {...field}
                               onChange={(e) =>
                                 field.onChange(
@@ -1064,7 +1070,7 @@ function JudgePageContent() {
                                 )
                               }
                             />
-                            <span className="text-muted-foreground text-sm">万円</span>
+                            <span className="text-muted-foreground text-sm shrink-0">万円</span>
                           </div>
                         </FormControl>
                         <FormMessage />
