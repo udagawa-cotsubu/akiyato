@@ -54,7 +54,7 @@ export default function JudgementsListPage() {
     let r = records;
     if (verdictFilter !== "ALL") {
       r = r.filter((rec) => {
-        const v = rec.output.verdict;
+        const v = rec.output.verdict as string;
         if (verdictFilter === "GO") return v === "GO" || v === "OK";
         if (verdictFilter === "NO_GO") return v === "NO_GO" || v === "NG";
         return v === verdictFilter;
@@ -152,21 +152,22 @@ export default function JudgementsListPage() {
                     {rec.input.property_name || "（未入力）"}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        rec.output.verdict === "GO" || rec.output.verdict === "OK"
-                          ? "default"
-                          : rec.output.verdict === "NO_GO" || rec.output.verdict === "NG"
-                            ? "destructive"
-                            : "secondary"
-                      }
-                    >
-                      {rec.output.verdict === "NO_GO" || rec.output.verdict === "NG"
-                        ? "NO-GO"
-                        : rec.output.verdict === "OK"
-                          ? "GO"
-                          : rec.output.verdict}
-                    </Badge>
+                    {(() => {
+                      const v = rec.output.verdict as string;
+                      return (
+                        <Badge
+                          variant={
+                            v === "GO" || v === "OK"
+                              ? "default"
+                              : v === "NO_GO" || v === "NG"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
+                        </Badge>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>{rec.output.confidence}%</TableCell>
                   <TableCell className="text-center">
