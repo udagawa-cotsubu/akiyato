@@ -162,3 +162,9 @@
 .judge-user-screen .font-medium {
   font-size: 1rem;
 }
+
+/* ユーザー画面: プレースホルダーを薄く */
+.judge-user-screen input::placeholder,
+.judge-user-screen textarea::placeholder {
+  color: oklch(0.72 0.02 260);
+}

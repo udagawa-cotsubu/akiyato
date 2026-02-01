@@ -1,7 +1,24 @@
 import type { PropertyInput } from "@/lib/types/property";
+import { getTaishinLabelFromBuiltYear } from "@/lib/utils";
 
-/** 判定用に PropertyInput を読みやすいテキストに整形する */
-export function formatPropertyInputForPrompt(input: PropertyInput): string {
+/** 旧フォーマットの input 用（再判定時に DB の古いレコードを渡す場合） */
+type InputWithLegacy = PropertyInput & {
+  ng_rebuild_not_allowed?: boolean;
+  ng_road_access_fail?: boolean;
+  loan_residential?: "OK" | "NG";
+  loan_investment?: "OK" | "NG";
+  inspection_available?: boolean;
+  inspection_status?: string;
+  building_legal_status?: string;
+  nonconformity_risk?: string;
+  title_rights_risk?: string;
+  foundation_type?: string;
+  termite?: string;
+  termite_note?: string;
+};
+
+/** 判定用に PropertyInput を読みやすいテキストに整形する（旧フォーマットの input も受け付ける） */
+export function formatPropertyInputForPrompt(input: InputWithLegacy): string {
   const lines: string[] = [];
   const add = (label: string, value: unknown) => {
     if (value === undefined || value === null || value === "") return;
@@ -10,6 +27,12 @@ export function formatPropertyInputForPrompt(input: PropertyInput): string {
   const addBool = (label: string, value: boolean) => {
     lines.push(`${label}: ${value ? "はい" : "いいえ"}`);
   };
+
+  const ngRebuildOrRoad =
+    input.ng_rebuild_or_road_fail ??
+    (input.ng_rebuild_not_allowed || input.ng_road_access_fail);
+  const loanRes = input.loan_residential ?? "OK";
+  const loanInv = input.loan_investment ?? "OK";
 
   lines.push("## A. 物件基本");
   add("物件名", input.property_name);
@@ -29,24 +52,35 @@ export function formatPropertyInputForPrompt(input: PropertyInput): string {
   add("接道", input.road_access);
 
   lines.push("\n## D. 即NG判定");
-  addBool("再建築不可", input.ng_rebuild_not_allowed);
-  addBool("接道義務未達", input.ng_road_access_fail);
-  addBool("雨漏り（原因不明）", input.ng_unknown_leak);
+  addBool("再建築不可・接道義務未達", ngRebuildOrRoad ?? false);
   addBool("重大な構造腐朽・傾き", input.ng_structure_severe);
-  addBool("擁壁・崖条例で是正不可", input.ng_retaining_wall_unfixable);
   addBool("近隣トラブル・係争中", input.ng_neighbor_trouble);
+  add("住宅ローン", loanRes === "OK" ? "可" : "不可");
+  add("投資ローン", loanInv === "OK" ? "可" : "不可");
 
+  const bLegal = input.building_legal_status;
+  const insp = input.inspection_status ?? (input.inspection_available === true ? "DONE" : input.inspection_available === false ? "NONE" : "UNKNOWN");
+  const noncon = input.nonconformity_risk;
+  const titleR = input.title_rights_risk;
   lines.push("\n## E. 法務・権利関係");
-  add("建築確認・検査済", input.building_legal_status);
-  addBool("インスペクション実施可能", input.inspection_available);
-  add("違反建築・既存不適格の懸念", input.nonconformity_risk);
-  add("権利関係の懸念", input.title_rights_risk);
+  add("建築確認・検査済", bLegal === "YES" ? "あり" : bLegal === "NO" ? "なし" : "不明");
+  add("インスペクション", insp === "DONE" ? "済み" : insp === "NONE" ? "無し" : "不明");
+  add("違反建築・既存不適格の懸念", noncon === "YES" ? "あり" : noncon === "NO" ? "なし" : "不明");
+  add("違反建築・既存不適格（コメント）", input.nonconformity_note);
+  add("権利関係の懸念", titleR === "YES" ? "あり" : titleR === "NO" ? "なし" : "不明");
+  add("権利関係（コメント）", input.title_rights_note);
 
   lines.push("\n## F. 建物・インフラ");
   add("築年", input.built_year);
-  addBool("新耐震基準", input.shin_taishin);
+  add("耐震区分", getTaishinLabelFromBuiltYear(input.built_year));
   add("構造", input.structure_type);
   addBool("雨漏りあり", input.water_leak);
+  add("雨漏り（コメント）", input.water_leak_note);
+  const foundation = input.foundation_type ?? "UNKNOWN";
+  const termite = input.termite ?? "UNKNOWN";
+  add("基礎種別", foundation === "MAT" ? "ベタ基礎" : foundation === "STRIP" ? "布基礎" : "未確認");
+  add("シロアリ", termite === "YES" ? "有り" : termite === "NO" ? "なし" : "不明");
+  add("シロアリ（コメント）", input.termite_note);
   add("傾き", input.tilt);
   add("上水", input.water);
   add("下水", input.sewage);
@@ -61,12 +95,6 @@ export function formatPropertyInputForPrompt(input: PropertyInput): string {
   addBool("床一部張替え", input.construction_items.floor_partial);
   addBool("外壁部分補修", input.construction_items.exterior_partial);
   add("希望売却価格（万円）", input.desired_sale_price_yen != null ? input.desired_sale_price_yen / 10000 : "");
-
-  lines.push("\n## H. 想定賃貸条件");
-  add("想定賃料（万円）", input.expected_rent_yen != null ? input.expected_rent_yen / 10000 : "");
-  addBool("ペット可", input.pet_allowed);
-  add("ペット備考", input.pet_note);
-  add("想定セグメント（単身・夫婦・ファミリー・投資家）", JSON.stringify(input.target_segments));
 
   lines.push("\n## I. 補足");
   add("備考", input.remarks);

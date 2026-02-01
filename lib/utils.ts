@@ -13,3 +13,13 @@ export function normalizeHalfWidthDigits(value: string): string {
     )
     .replace(/\D/g, "")
 }
+
+/** 築年から耐震区分を判定（1981年5月まで＝旧耐震、1981年6月1日以降＝新耐震。年のみのため1981は不明） */
+export function getTaishinLabelFromBuiltYear(
+  builtYear: number | undefined
+): "新耐震" | "旧耐震" | "不明" {
+  if (builtYear == null || builtYear <= 0) return "不明";
+  if (builtYear < 1981) return "旧耐震";
+  if (builtYear > 1981) return "新耐震";
+  return "不明"; // 1981年は月が分からないため
+}

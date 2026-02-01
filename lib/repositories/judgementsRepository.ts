@@ -13,6 +13,8 @@ function toRecord(row: {
   error_message?: string | null;
   area_profile?: JudgementRecord["area_profile"];
   price_feedback?: JudgementRecord["price_feedback"];
+  surrounding_rent_market?: string | null;
+  market_data?: JudgementRecord["market_data"];
 }): JudgementRecord {
   return {
     id: row.id,
@@ -24,6 +26,8 @@ function toRecord(row: {
     error_message: row.error_message ?? undefined,
     area_profile: row.area_profile ?? undefined,
     price_feedback: row.price_feedback ?? undefined,
+    surrounding_rent_market: row.surrounding_rent_market ?? undefined,
+    market_data: row.market_data ?? undefined,
   };
 }
 
@@ -62,6 +66,8 @@ export async function create(
       error_message: record.error_message ?? null,
       area_profile: record.area_profile ?? null,
       price_feedback: record.price_feedback ?? null,
+      surrounding_rent_market: record.surrounding_rent_market ?? null,
+      market_data: record.market_data ?? null,
     })
     .select()
     .single();

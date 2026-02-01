@@ -1,9 +1,5 @@
 import { z } from "zod";
-import type {
-  PropertyInput,
-  TargetSegments,
-  ConstructionItems,
-} from "@/lib/types/property";
+import type { PropertyInput, ConstructionItems } from "@/lib/types/property";
 import { SURROUNDING_ENV_OPTIONS } from "@/lib/types/property";
 
 const surroundingEnvValues = ["", ...SURROUNDING_ENV_OPTIONS] as const;
@@ -14,13 +10,6 @@ const HALF_WIDTH_DIGITS_MESSAGE = "半角数値のみ入力してください";
 const halfWidthDigitsString = z
   .string()
   .refine((s) => /^[0-9]*$/.test(s), { message: HALF_WIDTH_DIGITS_MESSAGE });
-
-const targetSegmentsSchema = z.object({
-  single: z.boolean(),
-  couple: z.boolean(),
-  family: z.boolean(),
-  investor: z.boolean(),
-});
 
 const constructionItemsSchema = z.object({
   water_system: z.boolean(),
@@ -41,30 +30,34 @@ export const propertyInputSchema = z.object({
   parking: z.enum(["ON_SITE", "NONE"]),
   monthly_parking_fee_yen: halfWidthDigitsString,
   road_access: z.string(),
-  ng_rebuild_not_allowed: z.boolean(),
-  ng_road_access_fail: z.boolean(),
-  ng_unknown_leak: z.boolean(),
+  // D. 即NG判定
+  ng_rebuild_or_road_fail: z.boolean(),
   ng_structure_severe: z.boolean(),
-  ng_retaining_wall_unfixable: z.boolean(),
   ng_neighbor_trouble: z.boolean(),
-  building_legal_status: z.enum(["CONFIRMED", "LIKELY_OK", "UNCONFIRMED"]),
-  inspection_available: z.boolean(),
-  nonconformity_risk: z.enum(["LOW", "MEDIUM", "HIGH", "UNKNOWN"]),
-  title_rights_risk: z.enum(["LOW", "MEDIUM", "HIGH", "UNKNOWN"]),
+  loan_residential: z.enum(["OK", "NG"]),
+  loan_investment: z.enum(["OK", "NG"]),
+  // E. 法務・権利関係
+  building_legal_status: z.enum(["YES", "NO", "UNKNOWN"]),
+  inspection_status: z.enum(["DONE", "NONE", "UNKNOWN"]),
+  nonconformity_risk: z.enum(["YES", "NO", "UNKNOWN"]),
+  nonconformity_note: z.string().optional(),
+  title_rights_risk: z.enum(["YES", "NO", "UNKNOWN"]),
+  title_rights_note: z.string().optional(),
+  // F. 建物・インフラ
   built_year: halfWidthDigitsString,
-  shin_taishin: z.boolean(),
   structure_type: z.enum(["WOOD", "LIGHT_STEEL", "RC", "OTHER"]),
   water_leak: z.boolean(),
+  water_leak_note: z.string().optional(),
+  foundation_type: z.enum(["MAT", "STRIP", "UNKNOWN"]),
+  termite: z.enum(["YES", "NO", "UNKNOWN"]),
+  termite_note: z.string().optional(),
   tilt: z.enum(["NONE", "SLIGHT", "YES", "NEED_CHECK"]),
   water: z.enum(["PUBLIC", "WELL", "OTHER"]),
   sewage: z.enum(["SEWER", "SEPTIC", "PIT", "OTHER"]),
   gas: z.enum(["CITY", "LP", "ALL_ELECTRIC", "OTHER"]),
   electricity: z.string(),
   condition_note: z.string(),
-  expected_rent_yen: halfWidthDigitsString,
-  pet_allowed: z.boolean(),
-  pet_note: z.string().optional(),
-  target_segments: targetSegmentsSchema,
+  // G. 工事・回転
   estimated_renovation_yen: halfWidthDigitsString,
   construction_items: constructionItemsSchema,
   desired_sale_price_yen: halfWidthDigitsString,
@@ -89,7 +82,6 @@ export function formValuesToPropertyInput(
     floors: toNum(values.floors) ?? 1,
     monthly_parking_fee_yen: toNum(values.monthly_parking_fee_yen) ?? undefined,
     built_year: toNum(values.built_year) ?? new Date().getFullYear(),
-    expected_rent_yen: toYen(values.expected_rent_yen) ?? undefined,
     estimated_renovation_yen: toYen(values.estimated_renovation_yen) ?? undefined,
     desired_sale_price_yen: toYen(values.desired_sale_price_yen) ?? undefined,
   };
@@ -110,20 +102,12 @@ export function propertyInputToFormValues(
     floors: toStr(input.floors),
     monthly_parking_fee_yen: toStr(input.monthly_parking_fee_yen),
     built_year: toStr(input.built_year),
-    expected_rent_yen: toYenStr(input.expected_rent_yen),
     estimated_renovation_yen: toYenStr(input.estimated_renovation_yen),
     desired_sale_price_yen: toYenStr(input.desired_sale_price_yen),
   } as z.infer<typeof propertyInputSchema>;
 }
 
 export type PropertyInputSchema = z.infer<typeof propertyInputSchema>;
-
-export const defaultTargetSegments: TargetSegments = {
-  single: false,
-  couple: false,
-  family: false,
-  investor: false,
-};
 
 export const defaultConstructionItems: ConstructionItems = {
   water_system: false,
@@ -145,30 +129,30 @@ export const defaultPropertyInput: z.infer<typeof propertyInputSchema> = {
   parking: "NONE",
   monthly_parking_fee_yen: "",
   road_access: "",
-  ng_rebuild_not_allowed: false,
-  ng_road_access_fail: false,
-  ng_unknown_leak: false,
+  ng_rebuild_or_road_fail: false,
   ng_structure_severe: false,
-  ng_retaining_wall_unfixable: false,
   ng_neighbor_trouble: false,
-  building_legal_status: "UNCONFIRMED",
-  inspection_available: false,
+  loan_residential: "OK",
+  loan_investment: "OK",
+  building_legal_status: "UNKNOWN",
+  inspection_status: "UNKNOWN",
   nonconformity_risk: "UNKNOWN",
+  nonconformity_note: undefined,
   title_rights_risk: "UNKNOWN",
+  title_rights_note: undefined,
   built_year: "",
-  shin_taishin: false,
   structure_type: "WOOD",
   water_leak: false,
+  water_leak_note: undefined,
+  foundation_type: "UNKNOWN",
+  termite: "UNKNOWN",
+  termite_note: undefined,
   tilt: "NONE",
   water: "PUBLIC",
   sewage: "SEWER",
   gas: "CITY",
   electricity: "",
   condition_note: "",
-  expected_rent_yen: "",
-  pet_allowed: false,
-  pet_note: undefined,
-  target_segments: defaultTargetSegments,
   estimated_renovation_yen: "",
   construction_items: defaultConstructionItems,
   desired_sale_price_yen: "",

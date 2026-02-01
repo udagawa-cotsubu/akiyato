@@ -2,7 +2,7 @@
 
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
-import type { AreaProfile, PriceFeedback } from "@/lib/types/judgement";
+import type { AreaProfile, PriceFeedback, MarketData } from "@/lib/types/judgement";
 import { OPENAI_LATEST_MODEL } from "@/lib/types/gptSettings";
 
 function getOpenAIClient(): OpenAI | null {
@@ -226,6 +226,179 @@ export async function fetchPriceFeedback(
     return { verdict, reasoning };
   } catch (err) {
     console.error("[AI] 希望価格の妥当性の取得に失敗しました:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * 周辺家賃相場・参考賃料を取得（GPT + Web検索）。
+ * 結果画面・管理画面で「周辺家賃相場（参考）」として表示する。
+ */
+export async function fetchSurroundingRentMarket(
+  address: string
+): Promise<string | null> {
+  if (!address?.trim()) return null;
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.error("[AI] OPENAI_API_KEY が設定されていません。");
+    return null;
+  }
+
+  const serperKey = process.env.SERPER_API_KEY?.trim();
+  let webContext = "";
+
+  if (serperKey) {
+    try {
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": serperKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          q: `${address} 周辺 家賃相場 賃料 相場 賃貸`,
+          num: 8,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          organic?: { title?: string; snippet?: string }[];
+        };
+        const snippets = (data.organic ?? [])
+          .slice(0, 6)
+          .map((o) => `${o.title ?? ""}\n${o.snippet ?? ""}`)
+          .filter(Boolean);
+        if (snippets.length > 0) {
+          webContext =
+            "\n\n【参考：Web検索結果】\n" +
+            snippets.join("\n\n---\n\n");
+        }
+      }
+    } catch (serperErr) {
+      console.warn("[AI] 周辺家賃のWeb検索に失敗しました。GPT のみで続行:", serperErr instanceof Error ? serperErr.message : serperErr);
+    }
+  }
+
+  try {
+    const prompt = `あなたは不動産・賃貸相場の専門家です。
+以下の住所について、周辺の家賃相場・参考賃料を簡潔にまとめてください。
+${webContext ? "上記のWeb検索結果を踏まえつつ、" : ""}一般的な相場感も補足してください。
+
+住所: ${address}
+
+出力は日本語で、200字程度でまとめてください。数値（例: 〇〇円〜〇〇円/月）があれば含めてください。`;
+
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_LATEST_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "あなたは不動産賃貸相場の専門家です。住所に基づき、周辺の家賃相場・参考賃料を簡潔にまとめてください。",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 400,
+    });
+
+    const content = completion.choices[0]?.message?.content?.trim() ?? null;
+    return content;
+  } catch (err) {
+    console.error("[AI] 周辺家賃相場の取得に失敗しました:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
+ * 地価・坪単価・周辺戸建て売買相場を取得（GPT + Web検索）。
+ * 国交省API利用可能後は、この関数内の取得ロジックのみAPI実装に差し替える。
+ */
+export async function fetchMarketData(address: string): Promise<MarketData | null> {
+  if (!address?.trim()) return null;
+  const openai = getOpenAIClient();
+  if (!openai) {
+    console.error("[AI] OPENAI_API_KEY が設定されていません。");
+    return null;
+  }
+
+  const serperKey = process.env.SERPER_API_KEY?.trim();
+  let webContext = "";
+
+  if (serperKey) {
+    try {
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: {
+          "X-API-KEY": serperKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          q: `${address} 地価 公示価格 坪単価 戸建て 売買 成約 相場`,
+          num: 8,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          organic?: { title?: string; snippet?: string }[];
+        };
+        const snippets = (data.organic ?? [])
+          .slice(0, 6)
+          .map((o) => `${o.title ?? ""}\n${o.snippet ?? ""}`)
+          .filter(Boolean);
+        if (snippets.length > 0) {
+          webContext =
+            "\n\n【参考：Web検索結果】\n" +
+            snippets.join("\n\n---\n\n");
+        }
+      }
+    } catch (serperErr) {
+      console.warn("[AI] 地価・坪単価のWeb検索に失敗しました。GPT のみで続行:", serperErr instanceof Error ? serperErr.message : serperErr);
+    }
+  }
+
+  try {
+    const prompt = `あなたは不動産・土地・戸建て売買の専門家です。
+以下の住所について、地価（公示価格等）、坪単価、周辺の戸建て売買相場・成約例を簡潔にまとめてください。
+${webContext ? "上記のWeb検索結果を踏まえつつ、" : ""}一般的な相場感も補足してください。
+
+住所: ${address}
+
+以下の3項目について、それぞれ1〜2文で簡潔に回答してください。不明な項目は「不明」と書いてください。
+- land_price: 地価（公示価格・基準地価等）
+- price_per_tsubo: 坪単価の目安
+- nearby_sales: 周辺の戸建て売買・成約相場`;
+
+    const completion = await openai.chat.completions.create({
+      model: OPENAI_LATEST_MODEL,
+      messages: [
+        {
+          role: "system",
+          content: "あなたは不動産・土地・戸建て売買の専門家です。住所に基づき、地価・坪単価・周辺実売を簡潔にまとめ、land_price / price_per_tsubo / nearby_sales の形式で回答してください。",
+        },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 500,
+    });
+
+    const content = completion.choices[0]?.message?.content?.trim() ?? null;
+    if (!content) return null;
+
+    const landPriceMatch = content.match(/land_price[：:]\s*([^\n]+)/i) ?? content.match(/地価[：:]\s*([^\n]+)/);
+    const pricePerTsuboMatch = content.match(/price_per_tsubo[：:]\s*([^\n]+)/i) ?? content.match(/坪単価[：:]\s*([^\n]+)/);
+    const nearbySalesMatch = content.match(/nearby_sales[：:]\s*([^\n]+)/i) ?? content.match(/周辺[^\n]*売買[：:]\s*([^\n]+)/);
+
+    const result: MarketData = {};
+    if (landPriceMatch?.[1]) result.land_price = landPriceMatch[1].trim();
+    if (pricePerTsuboMatch?.[1]) result.price_per_tsubo = pricePerTsuboMatch[1].trim();
+    if (nearbySalesMatch?.[1]) result.nearby_sales = nearbySalesMatch[1].trim();
+
+    if (Object.keys(result).length === 0) {
+      result.land_price = content.slice(0, 200);
+    }
+    return result;
+  } catch (err) {
+    console.error("[AI] 地価・坪単価・実売の取得に失敗しました:", err instanceof Error ? err.message : err);
     return null;
   }
 }

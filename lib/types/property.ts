@@ -1,6 +1,6 @@
 /**
  * 判定フォーム入力（PropertyInput）
- * セクション A〜I の全フィールド
+ * セクション A〜G + I（H 想定賃貸条件は削除、周辺家賃は結果画面で Web 取得表示）
  */
 
 export type ParkingType = "ON_SITE" | "NONE";
@@ -33,81 +33,84 @@ export type GasType = "CITY" | "LP" | "ALL_ELECTRIC" | "OTHER";
 /** 傾き（建物の傾き有無・程度） */
 export type TiltType = "NONE" | "SLIGHT" | "YES" | "NEED_CHECK";
 
-/** 建築確認・検査済の有無 */
-export type BuildingLegalStatus = "CONFIRMED" | "LIKELY_OK" | "UNCONFIRMED";
+/** 建築確認・検査済: あり／なし／不明 */
+export type BuildingLegalStatus = "YES" | "NO" | "UNKNOWN";
 
-/** リスクレベル */
-export type RiskLevel = "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
+/** インスペクション: 済み／無し／不明 */
+export type InspectionStatus = "DONE" | "NONE" | "UNKNOWN";
 
-export interface TargetSegments {
-  single: boolean;
-  couple: boolean;
-  family: boolean;
-  investor: boolean;
-}
+/** あり／なし／不明（違反建築・権利関係など） */
+export type YesNoUnknown = "YES" | "NO" | "UNKNOWN";
+
+/** 住宅ローン・投資ローン: 可／不可 */
+export type LoanOkNg = "OK" | "NG";
+
+/** 基礎種別: ベタ基礎／布基礎／未確認 */
+export type FoundationType = "MAT" | "STRIP" | "UNKNOWN";
+
+/** シロアリ: 有り／なし／不明 */
+export type TermiteStatus = "YES" | "NO" | "UNKNOWN";
 
 /** G. 工事内容（チェックボックス） */
 export interface ConstructionItems {
-  water_system: boolean; // 水回り交換（キッチン・浴室・トイレ）
-  wallpaper_full: boolean; // 内装クロス全面
-  floor_partial: boolean; // 床一部張替え
-  exterior_partial: boolean; // 外壁部分補修
+  water_system: boolean;
+  wallpaper_full: boolean;
+  floor_partial: boolean;
+  exterior_partial: boolean;
 }
 
 export interface PropertyInput {
   // A. 物件基本
   property_name: string;
-  address: string; // 住所（町名まで可）
+  address: string;
 
   // B. 面積・間取り
   land_area_m2: number;
   building_area_m2: number;
-  layout: string; // 間取り（例: 2LDK）
-  floors: number; // 階数
+  layout: string;
+  floors: number;
 
   // C. 立地・駐車場
-  nearest_access: string; // 最寄駅(徒歩何分か)
-  surrounding_env: string; // 周辺環境（SURROUNDING_ENV_OPTIONS のいずれか、または空文字）
+  nearest_access: string;
+  surrounding_env: string;
   parking: ParkingType;
   monthly_parking_fee_yen?: number;
-  road_access: string; // 接道
+  road_access: string;
 
   // D. 即NG判定
-  ng_rebuild_not_allowed: boolean;
-  ng_road_access_fail: boolean;
-  ng_unknown_leak: boolean;
+  ng_rebuild_or_road_fail: boolean; // 再建築不可・接道義務未達（統合）
   ng_structure_severe: boolean;
-  ng_retaining_wall_unfixable: boolean;
   ng_neighbor_trouble: boolean;
+  loan_residential: LoanOkNg; // 住宅ローン 可/不可
+  loan_investment: LoanOkNg; // 投資ローン 可/不可
 
-  // E. 法務・権利関係（物件のパワー評価用。ローン可否は自社で組むため不要）
-  building_legal_status: BuildingLegalStatus; // 建築確認・検査済の存在
-  inspection_available: boolean; // インスペクション実施可能か
-  nonconformity_risk: RiskLevel; // 違反建築/既存不適格の懸念
-  title_rights_risk: RiskLevel; // 権利関係の懸念
+  // E. 法務・権利関係
+  building_legal_status: BuildingLegalStatus;
+  inspection_status: InspectionStatus;
+  nonconformity_risk: YesNoUnknown;
+  nonconformity_note?: string;
+  title_rights_risk: YesNoUnknown;
+  title_rights_note?: string;
 
-  // F. 建物・インフラ
+  // F. 建物・インフラ（耐震は築年数から自動判定のため入力なし）
   built_year: number;
-  shin_taishin: boolean;
   structure_type: StructureType;
-  water_leak: boolean; // 雨漏り有無（true=有）
-  tilt: TiltType; // 傾き
+  water_leak: boolean;
+  water_leak_note?: string;
+  foundation_type: FoundationType;
+  termite: TermiteStatus;
+  termite_note?: string;
+  tilt: TiltType;
   water: WaterType;
   sewage: SewageType;
   gas: GasType;
-  electricity: string; // 電気
+  electricity: string;
   condition_note: string;
 
   // G. 工事・回転
-  estimated_renovation_yen?: number; // 想定リフォーム費（円）。表示は万円
-  construction_items: ConstructionItems; // 工事内容
-  desired_sale_price_yen?: number; // 希望売却価格（円）。表示は万円
-
-  // H. 想定賃貸条件
-  expected_rent_yen?: number;
-  pet_allowed: boolean;
-  pet_note?: string;
-  target_segments: TargetSegments;
+  estimated_renovation_yen?: number;
+  construction_items: ConstructionItems;
+  desired_sale_price_yen?: number;
 
   // I. 補足
   remarks: string;

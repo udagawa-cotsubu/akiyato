@@ -26,17 +26,21 @@ export function JudgeResultCard({
   result,
   area_profile,
   price_feedback,
+  surrounding_rent_market,
 }: {
   result: JudgementResult;
   area_profile?: AreaProfile | null;
   price_feedback?: PriceFeedback | null;
+  /** 周辺家賃相場・参考賃料（GPT+Web取得） */
+  surrounding_rent_market?: string | null;
 }) {
   const verdictVariant =
-    result.verdict === "OK"
+    result.verdict === "GO"
       ? "default"
-      : result.verdict === "NG"
+      : result.verdict === "NO_GO"
         ? "destructive"
         : "secondary";
+  const verdictLabel = result.verdict === "NO_GO" ? "NO-GO" : result.verdict;
   const reasonsMd = result.reasons.join("\n");
   return (
     <div className="space-y-4">
@@ -45,7 +49,7 @@ export function JudgeResultCard({
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-lg">判定結果</CardTitle>
             <Badge variant={verdictVariant} className="text-base">
-              {result.verdict}
+              {verdictLabel}
             </Badge>
             <span className="text-muted-foreground text-sm">
               信頼度 {result.confidence}%
@@ -101,6 +105,12 @@ export function JudgeResultCard({
                 <li key={i}>{a}</li>
               ))}
             </ul>
+          </div>
+        )}
+        {surrounding_rent_market && (
+          <div>
+            <h4 className="mb-1 text-sm font-medium">周辺家賃相場（参考）</h4>
+            <p className="text-sm">{surrounding_rent_market}</p>
           </div>
         )}
         {price_feedback && (

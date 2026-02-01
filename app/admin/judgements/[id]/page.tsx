@@ -23,15 +23,14 @@ import {
 import type {
   PropertyInput,
   TiltType,
-  BuildingLegalStatus,
-  RiskLevel,
   StructureType,
   WaterType,
   SewageType,
   GasType,
 } from "@/lib/types/property";
+import { getTaishinLabelFromBuiltYear } from "@/lib/utils";
 import type { JudgementRecord } from "@/lib/types/judgement";
-import { fetchAreaProfile, fetchPriceFeedback } from "@/lib/actions/ai";
+import { fetchAreaProfile, fetchPriceFeedback, fetchSurroundingRentMarket, fetchMarketData } from "@/lib/actions/ai";
 import { getById, create as createJudgement, deleteRecord } from "@/lib/repositories/judgementsRepository";
 import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository";
 import { runJudge } from "@/lib/actions/judge";
@@ -59,25 +58,52 @@ function tiltLabel(tilt: TiltType | undefined): string {
   return tilt ? TILT_LABELS[tilt] ?? "—" : "—";
 }
 
-const BUILDING_LEGAL_LABELS: Record<BuildingLegalStatus, string> = {
-  CONFIRMED: "建築確認・検査済が確認できた",
-  LIKELY_OK: "たぶん問題なさそう（未確認）",
-  UNCONFIRMED: "不明",
-};
-
-const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
-  LOW: "低",
-  MEDIUM: "中",
-  HIGH: "高",
-  UNKNOWN: "不明",
-};
-
-function buildingLegalLabel(v: BuildingLegalStatus | undefined): string {
-  return v ? BUILDING_LEGAL_LABELS[v] ?? "—" : "—";
+/** 建築確認・検査済（あり/なし/不明 または 旧CONFIRMED/LIKELY_OK/UNCONFIRMED） */
+function buildingLegalLabel(v: string | undefined): string {
+  if (!v) return "—";
+  if (v === "YES") return "あり";
+  if (v === "NO") return "なし";
+  if (v === "UNKNOWN") return "不明";
+  if (v === "CONFIRMED") return "建築確認・検査済が確認できた";
+  if (v === "LIKELY_OK") return "たぶん問題なさそう（未確認）";
+  return "—";
 }
 
-function riskLevelLabel(v: RiskLevel | undefined): string {
-  return v ? RISK_LEVEL_LABELS[v] ?? "—" : "—";
+/** インスペ（済み/無し/不明 または 旧 boolean） */
+function inspectionLabel(
+  v: string | boolean | undefined
+): string {
+  if (v === "DONE") return "インスペクション済み";
+  if (v === "NONE") return "無し";
+  if (v === "UNKNOWN") return "不明";
+  if (typeof v === "boolean") return v ? "できる" : "できない";
+  return "—";
+}
+
+/** あり/なし/不明 または 旧 LOW/MEDIUM/HIGH/UNKNOWN */
+function yesNoUnknownLabel(v: string | undefined): string {
+  if (!v) return "—";
+  if (v === "YES") return "あり";
+  if (v === "NO") return "なし";
+  if (v === "UNKNOWN") return "不明";
+  if (v === "LOW") return "低";
+  if (v === "MEDIUM") return "中";
+  if (v === "HIGH") return "高";
+  return "—";
+}
+
+function foundationLabel(v: string | undefined): string {
+  if (v === "MAT") return "ベタ基礎";
+  if (v === "STRIP") return "布基礎";
+  if (v === "UNKNOWN") return "未確認";
+  return "—";
+}
+
+function termiteLabel(v: string | undefined): string {
+  if (v === "YES") return "有り";
+  if (v === "NO") return "なし";
+  if (v === "UNKNOWN") return "不明";
+  return "—";
 }
 
 const STRUCTURE_LABELS: Record<StructureType, string> = {
@@ -140,16 +166,22 @@ function InputSection({
   );
 }
 
+/** 旧フォーマットの input 用（DB に古いレコードがある場合） */
+type InputWithLegacy = PropertyInput & {
+  ng_rebuild_not_allowed?: boolean;
+  ng_road_access_fail?: boolean;
+  inspection_available?: boolean;
+  building_legal_status?: string;
+  inspection_status?: string;
+  nonconformity_risk?: string;
+  title_rights_risk?: string;
+};
+
 function InputDisplay({ input }: { input: PropertyInput }) {
-  const s = input.target_segments;
-  const targetLabels = [
-    s.single && "単身",
-    s.couple && "カップル",
-    s.family && "ファミリー",
-    s.investor && "投資家",
-  ]
-    .filter(Boolean)
-    .join(" / ");
+  const inp = input as InputWithLegacy;
+  const ngRebuildOrRoad =
+    inp.ng_rebuild_or_road_fail ??
+    (inp.ng_rebuild_not_allowed || inp.ng_road_access_fail);
   return (
     <div className="space-y-4">
       <InputSection title="A. 物件基本">
@@ -171,24 +203,39 @@ function InputDisplay({ input }: { input: PropertyInput }) {
         <p>接道: {input.road_access ?? "—"}</p>
       </InputSection>
       <InputSection title="D. 即NG判定">
-        <p>再建築不可: {input.ng_rebuild_not_allowed ? "はい" : "いいえ"}</p>
-        <p>接道義務未達: {input.ng_road_access_fail ? "はい" : "いいえ"}</p>
-        <p>雨漏り原因不明: {input.ng_unknown_leak ? "はい" : "いいえ"}</p>
+        <p>再建築不可・接道義務未達: {ngRebuildOrRoad ? "はい" : "いいえ"}</p>
         <p>構造腐朽/傾き: {input.ng_structure_severe ? "はい" : "いいえ"}</p>
-        <p>擁壁是正不可: {input.ng_retaining_wall_unfixable ? "はい" : "いいえ"}</p>
         <p>近隣トラブル: {input.ng_neighbor_trouble ? "はい" : "いいえ"}</p>
+        {inp.loan_residential != null && (
+          <p>住宅ローン: {inp.loan_residential === "OK" ? "可" : "不可"}</p>
+        )}
+        {inp.loan_investment != null && (
+          <p>投資ローン: {inp.loan_investment === "OK" ? "可" : "不可"}</p>
+        )}
       </InputSection>
       <InputSection title="E. 法務・権利関係">
-        <p>建築確認・検査済: {buildingLegalLabel((input as PropertyInput & { building_legal_status?: BuildingLegalStatus }).building_legal_status)}</p>
-        <p>インスペ実施可能: {(input as PropertyInput & { inspection_available?: boolean }).inspection_available ? "できる" : "できない"}</p>
-        <p>違反建築/既存不適格の懸念: {riskLevelLabel((input as PropertyInput & { nonconformity_risk?: RiskLevel }).nonconformity_risk)}</p>
-        <p>権利関係の懸念: {riskLevelLabel((input as PropertyInput & { title_rights_risk?: RiskLevel }).title_rights_risk)}</p>
+        <p>建築確認・検査済: {buildingLegalLabel(inp.building_legal_status)}</p>
+        <p>インスペ: {inspectionLabel(inp.inspection_status ?? inp.inspection_available)}</p>
+        <p>違反建築/既存不適格の懸念: {yesNoUnknownLabel(inp.nonconformity_risk)}</p>
+        {inp.nonconformity_note && (
+          <p>違反建築コメント: {inp.nonconformity_note}</p>
+        )}
+        <p>権利関係の懸念: {yesNoUnknownLabel(inp.title_rights_risk)}</p>
+        {inp.title_rights_note && (
+          <p>権利関係コメント: {inp.title_rights_note}</p>
+        )}
       </InputSection>
       <InputSection title="F. 建物・インフラ">
         <p>築年: {input.built_year}</p>
-        <p>新耐震: {input.shin_taishin ? "はい" : "いいえ"}</p>
+        <p>耐震区分: {getTaishinLabelFromBuiltYear(input.built_year)}</p>
         <p>構造: {structureLabel(input.structure_type)}</p>
         <p>雨漏り有無: {input.water_leak ? "有" : "無"}</p>
+        {input.water_leak_note && (
+          <p>雨漏りコメント: {input.water_leak_note}</p>
+        )}
+        <p>基礎種別: {foundationLabel(inp.foundation_type)}</p>
+        <p>シロアリ: {termiteLabel(inp.termite)}</p>
+        {inp.termite_note && <p>シロアリコメント: {inp.termite_note}</p>}
         <p>傾き: {tiltLabel(input.tilt)}</p>
         <p>上水: {waterLabel(input.water)} / 下水: {sewageLabel(input.sewage)} / ガス: {gasLabel(input.gas)}</p>
         <p>電気: {input.electricity ?? "—"}</p>
@@ -231,14 +278,6 @@ function InputDisplay({ input }: { input: PropertyInput }) {
             : "—"}
         </p>
       </InputSection>
-      <InputSection title="H. 想定賃貸条件">
-        {input.expected_rent_yen != null && (
-          <p>想定賃料: {input.expected_rent_yen / 10000} 万円</p>
-        )}
-        <p>ペット可: {input.pet_allowed ? "はい" : "いいえ"}</p>
-        {input.pet_note && <p>ペット備考: {input.pet_note}</p>}
-        <p>ターゲット: {targetLabels || "—"}</p>
-      </InputSection>
       <InputSection title="I. 補足">
         <p>{input.remarks || "—"}</p>
       </InputSection>
@@ -275,12 +314,14 @@ export default function JudgementDetailPage() {
         model: OPENAI_LATEST_MODEL,
         temperature: settings.temperature,
       };
-      const [area_profile, price_feedback] = await Promise.all([
+      const [area_profile, price_feedback, surrounding_rent_market, market_data] = await Promise.all([
         fetchAreaProfile(record.input.address),
         fetchPriceFeedback(
           record.input.address,
           record.input.desired_sale_price_yen
         ),
+        fetchSurroundingRentMarket(record.input.address),
+        fetchMarketData(record.input.address),
       ]);
       const newRecord = await createJudgement({
         input: record.input,
@@ -289,6 +330,8 @@ export default function JudgementDetailPage() {
         status: "COMPLETED",
         area_profile: area_profile ?? null,
         price_feedback: price_feedback ?? null,
+        surrounding_rent_market: surrounding_rent_market ?? null,
+        market_data: market_data ?? null,
       });
       toast.success("再判定を保存しました");
       router.push(`/admin/judgements/${newRecord.id}`);
@@ -325,11 +368,12 @@ export default function JudgementDetailPage() {
 
   const { input, output, prompt_snapshot } = record;
   const verdictVariant =
-    output.verdict === "OK"
+    output.verdict === "GO"
       ? "default"
-      : output.verdict === "NG"
+      : output.verdict === "NO_GO"
         ? "destructive"
         : "secondary";
+  const verdictLabel = output.verdict === "NO_GO" ? "NO-GO" : output.verdict;
 
   return (
     <div className="space-y-6">
@@ -377,7 +421,7 @@ export default function JudgementDetailPage() {
             <CardHeader>
               <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-base">判定結果</CardTitle>
-                <Badge variant={verdictVariant}>{output.verdict}</Badge>
+                <Badge variant={verdictVariant}>{verdictLabel}</Badge>
                 <span className="text-muted-foreground text-sm">
                   信頼度 {output.confidence}%
                 </span>
@@ -456,6 +500,12 @@ export default function JudgementDetailPage() {
                   </ul>
                 </div>
               )}
+              {record.surrounding_rent_market && (
+                <div>
+                  <h4 className="mb-1 text-sm font-medium">周辺家賃相場（参考）</h4>
+                  <p className="text-sm">{record.surrounding_rent_market}</p>
+                </div>
+              )}
               {record.price_feedback && (
                 <div>
                   <h4 className="mb-1 text-sm font-medium">希望価格の妥当性</h4>
@@ -477,6 +527,28 @@ export default function JudgementDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {record.market_data && (record.market_data.land_price ?? record.market_data.price_per_tsubo ?? record.market_data.nearby_sales) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">地価・坪単価・周辺実売</CardTitle>
+                <CardDescription>
+                  GPT+Web検索により要約（国交省API利用可能後に差し替え可）
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {record.market_data.land_price && (
+                  <p><span className="font-medium">地価:</span> {record.market_data.land_price}</p>
+                )}
+                {record.market_data.price_per_tsubo && (
+                  <p><span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}</p>
+                )}
+                {record.market_data.nearby_sales && (
+                  <p><span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}</p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {record.area_profile && (
             <Card>

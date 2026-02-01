@@ -53,7 +53,12 @@ export default function JudgementsListPage() {
   const filtered = useMemo(() => {
     let r = records;
     if (verdictFilter !== "ALL") {
-      r = r.filter((rec) => rec.output.verdict === verdictFilter);
+      r = r.filter((rec) => {
+        const v = rec.output.verdict;
+        if (verdictFilter === "GO") return v === "GO" || v === "OK";
+        if (verdictFilter === "NO_GO") return v === "NO_GO" || v === "NG";
+        return v === verdictFilter;
+      });
     }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -95,8 +100,8 @@ export default function JudgementsListPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">すべて</SelectItem>
-            <SelectItem value="OK">OK</SelectItem>
-            <SelectItem value="NG">NG</SelectItem>
+            <SelectItem value="GO">GO</SelectItem>
+            <SelectItem value="NO_GO">NO-GO</SelectItem>
             <SelectItem value="HOLD">HOLD</SelectItem>
           </SelectContent>
         </Select>
@@ -149,14 +154,18 @@ export default function JudgementsListPage() {
                   <TableCell>
                     <Badge
                       variant={
-                        rec.output.verdict === "OK"
+                        rec.output.verdict === "GO" || rec.output.verdict === "OK"
                           ? "default"
-                          : rec.output.verdict === "NG"
+                          : rec.output.verdict === "NO_GO" || rec.output.verdict === "NG"
                             ? "destructive"
                             : "secondary"
                       }
                     >
-                      {rec.output.verdict}
+                      {rec.output.verdict === "NO_GO" || rec.output.verdict === "NG"
+                        ? "NO-GO"
+                        : rec.output.verdict === "OK"
+                          ? "GO"
+                          : rec.output.verdict}
                     </Badge>
                   </TableCell>
                   <TableCell>{rec.output.confidence}%</TableCell>

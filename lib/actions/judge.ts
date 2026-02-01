@@ -61,9 +61,15 @@ export async function runJudge(
   }
 
   const obj = parsed as Record<string, unknown>;
-  const verdict = (obj.verdict === "OK" || obj.verdict === "NG" || obj.verdict === "HOLD"
-    ? obj.verdict
-    : "HOLD") as JudgementResult["verdict"];
+  const rawVerdict = obj.verdict;
+  let verdict: JudgementResult["verdict"] = "HOLD";
+  if (rawVerdict === "GO" || rawVerdict === "NO_GO" || rawVerdict === "HOLD") {
+    verdict = rawVerdict;
+  } else if (rawVerdict === "OK") {
+    verdict = "GO";
+  } else if (rawVerdict === "NG") {
+    verdict = "NO_GO";
+  }
   const confidence = typeof obj.confidence === "number" ? Math.max(0, Math.min(100, obj.confidence)) : 50;
   const reasons = Array.isArray(obj.reasons) ? (obj.reasons as string[]) : [];
   const missing_checks = Array.isArray(obj.missing_checks) ? (obj.missing_checks as string[]) : [];

@@ -4,7 +4,7 @@
 
 import type { PropertyInput } from "./property";
 
-export type Verdict = "OK" | "NG" | "HOLD";
+export type Verdict = "GO" | "NO_GO" | "HOLD";
 
 export interface JudgementRisk {
   title: string;
@@ -38,6 +38,13 @@ export interface PriceFeedback {
   reasoning: string;
 }
 
+/** 地価・坪単価・周辺実売など（GPT+Web または 国交省API で取得、同一構造で格納） */
+export interface MarketData {
+  land_price?: string;
+  price_per_tsubo?: string;
+  nearby_sales?: string;
+}
+
 export interface PromptSnapshot {
   name: string;
   version: string;
@@ -60,4 +67,8 @@ export interface JudgementRecord {
   area_profile?: AreaProfile | null;
   /** 希望価格の妥当性フィードバック（GPT生成） */
   price_feedback?: PriceFeedback | null;
+  /** 周辺家賃相場・参考賃料（GPT+Web取得） */
+  surrounding_rent_market?: string | null;
+  /** 地価・坪単価・周辺実売など（GPT+Web または 国交省API） */
+  market_data?: MarketData | null;
 }

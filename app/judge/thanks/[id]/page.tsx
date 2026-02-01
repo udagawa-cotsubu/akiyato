@@ -1,33 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { JudgeResultCard } from "@/components/judge/JudgeResultCard";
 import { getById } from "@/lib/repositories/judgementsRepository";
 import type { JudgementRecord } from "@/lib/types/judgement";
-import { propertyInputToFormValues } from "@/lib/schemas/propertyInput";
-
-const JUDGE_PREFILL_KEY = "judge-prefill";
 
 export default function JudgeThanksPage() {
   const params = useParams();
-  const router = useRouter();
   const id = params.id as string;
   const [record, setRecord] = useState<JudgementRecord | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const handleJudgeAgain = () => {
-    if (!record) return;
-    try {
-      const formValues = propertyInputToFormValues(record.input);
-      sessionStorage.setItem(JUDGE_PREFILL_KEY, JSON.stringify(formValues));
-    } catch {
-      // ignore
-    }
-    router.push("/judge");
-  };
 
   useEffect(() => {
     getById(id).then((r) => {
@@ -57,12 +42,21 @@ export default function JudgeThanksPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-slate-200 bg-[var(--background)]/98 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">物件判定</h1>
+      <header className="border-b border-slate-200 bg-[var(--background)]/98 px-4 py-2.5 backdrop-blur">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
+          <Link href="/judge" className="flex items-center gap-2.5 shrink-0">
+            <img
+              src="/logo-bk.svg"
+              alt=""
+              className="h-9 w-auto"
+              width={40}
+              height={35}
+            />
+            <span className="text-lg font-semibold tracking-tight">物件判定AI</span>
+          </Link>
           <Link
             href="/admin/judgements"
-            className="text-muted-foreground text-base underline"
+            className="text-muted-foreground text-sm underline shrink-0"
           >
             管理画面
           </Link>
@@ -84,22 +78,14 @@ export default function JudgeThanksPage() {
             result={record.output}
             area_profile={record.area_profile}
             price_feedback={record.price_feedback}
+            surrounding_rent_market={record.surrounding_rent_market}
           />
 
-          <div className="flex flex-col gap-3">
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={handleJudgeAgain}
-            >
-              もう一度判定する
-            </Button>
-            <p className="text-center text-muted-foreground">
-              <Link href="/judge" className="underline">
-                判定フォームに戻る
-              </Link>
-            </p>
-          </div>
+          <p className="text-center text-muted-foreground">
+            <Link href="/judge" className="underline">
+              判定フォームに戻る
+            </Link>
+          </p>
         </div>
       </main>
     </div>
