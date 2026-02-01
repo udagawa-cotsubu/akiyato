@@ -1,5 +1,5 @@
 import { getSupabaseBrowser } from "@/lib/supabase/client";
-import type { JudgementRecord } from "@/lib/types/judgement";
+import type { JudgementRecord, JudgementOutcome } from "@/lib/types/judgement";
 
 const TABLE = "judgements";
 
@@ -15,6 +15,10 @@ function toRecord(row: {
   price_feedback?: JudgementRecord["price_feedback"];
   surrounding_rent_market?: string | null;
   market_data?: JudgementRecord["market_data"];
+  outcome_status?: JudgementRecord["outcome_status"];
+  outcome_score?: number | null;
+  outcome_note?: string | null;
+  outcome_at?: string | null;
 }): JudgementRecord {
   return {
     id: row.id,
@@ -28,6 +32,10 @@ function toRecord(row: {
     price_feedback: row.price_feedback ?? undefined,
     surrounding_rent_market: row.surrounding_rent_market ?? undefined,
     market_data: row.market_data ?? undefined,
+    outcome_status: row.outcome_status ?? undefined,
+    outcome_score: row.outcome_score ?? undefined,
+    outcome_note: row.outcome_note ?? undefined,
+    outcome_at: row.outcome_at ?? undefined,
   };
 }
 
@@ -79,4 +87,24 @@ export async function deleteRecord(id: string): Promise<void> {
   const supabase = getSupabaseBrowser();
   const { error } = await supabase.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(`判定の削除に失敗しました: ${error.message}`);
+}
+
+export async function updateOutcome(
+  id: string,
+  outcome: JudgementOutcome
+): Promise<JudgementRecord | null> {
+  const supabase = getSupabaseBrowser();
+  const { data, error } = await supabase
+    .from(TABLE)
+    .update({
+      outcome_status: outcome.outcome_status ?? null,
+      outcome_score: outcome.outcome_score ?? null,
+      outcome_note: outcome.outcome_note ?? null,
+      outcome_at: outcome.outcome_at ?? null,
+    })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`結果の更新に失敗しました: ${error.message}`);
+  return data ? toRecord(data) : null;
 }

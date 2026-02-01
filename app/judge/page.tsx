@@ -146,7 +146,7 @@ function JudgePageContent() {
       )}
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-[var(--background)]/98 px-4 py-2.5 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
-          <Link href="/judge" className="flex items-center gap-2.5 shrink-0">
+          <Link href="/judge" className="cursor-pointer flex items-center gap-2.5 shrink-0">
             <img
               src="/logo-bk.svg"
               alt=""
@@ -158,7 +158,7 @@ function JudgePageContent() {
           </Link>
           <Link
             href="/admin/judgements"
-            className="text-muted-foreground text-sm underline shrink-0"
+            className="cursor-pointer text-muted-foreground text-sm underline shrink-0"
           >
             管理画面
           </Link>

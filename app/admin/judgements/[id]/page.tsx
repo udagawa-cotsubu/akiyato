@@ -21,6 +21,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import type {
   PropertyInput,
   TiltType,
@@ -30,10 +40,10 @@ import type {
   GasType,
 } from "@/lib/types/property";
 import { getTaishinLabelFromBuiltYear } from "@/lib/utils";
-import type { JudgementRecord } from "@/lib/types/judgement";
+import type { JudgementRecord, OutcomeStatus } from "@/lib/types/judgement";
 import { fetchAreaProfile, fetchPriceFeedback, fetchSurroundingRentMarket, fetchMarketData } from "@/lib/actions/ai";
 import { propertyInputToFormValues } from "@/lib/schemas/propertyInput";
-import { getById, create as createJudgement, deleteRecord } from "@/lib/repositories/judgementsRepository";
+import { getById, create as createJudgement, deleteRecord, updateOutcome } from "@/lib/repositories/judgementsRepository";
 import { get as getGptSettings } from "@/lib/repositories/gptSettingsRepository";
 import { runJudge } from "@/lib/actions/judge";
 import { OPENAI_LATEST_MODEL } from "@/lib/types/gptSettings";
@@ -47,6 +57,18 @@ function formatDate(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+const OUTCOME_STATUS_OPTIONS: { value: OutcomeStatus; label: string }[] = [
+  { value: "pending", label: "未記録" },
+  { value: "visited", label: "訪問" },
+  { value: "passed", label: "見送り" },
+  { value: "acquired", label: "買取" },
+];
+
+function outcomeStatusLabel(s: OutcomeStatus | undefined | null): string {
+  const o = OUTCOME_STATUS_OPTIONS.find((x) => x.value === s);
+  return o?.label ?? "—";
 }
 
 const TILT_LABELS: Record<TiltType, string> = {
@@ -299,6 +321,10 @@ export default function JudgementDetailPage() {
   const [loading, setLoading] = useState(true);
   const [reJudging, setReJudging] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [outcomeSaving, setOutcomeSaving] = useState(false);
+  const [outcomeStatus, setOutcomeStatus] = useState<OutcomeStatus>("pending");
+  const [outcomeScore, setOutcomeScore] = useState("");
+  const [outcomeNote, setOutcomeNote] = useState("");
 
   useEffect(() => {
     getById(id).then((r) => {
@@ -306,6 +332,13 @@ export default function JudgementDetailPage() {
       setLoading(false);
     });
   }, [id]);
+
+  useEffect(() => {
+    if (!record) return;
+    setOutcomeStatus(record.outcome_status ?? "pending");
+    setOutcomeScore(record.outcome_score != null ? String(record.outcome_score) : "");
+    setOutcomeNote(record.outcome_note ?? "");
+  }, [record?.id, record?.outcome_status, record?.outcome_score, record?.outcome_note]);
 
   const handleReJudge = async () => {
     if (!record) return;
@@ -358,6 +391,26 @@ export default function JudgementDetailPage() {
     }
   };
 
+  const handleSaveOutcome = async () => {
+    if (!record) return;
+    setOutcomeSaving(true);
+    try {
+      const score = outcomeScore.trim() === "" ? null : parseInt(outcomeScore, 10);
+      const updated = await updateOutcome(record.id, {
+        outcome_status: outcomeStatus,
+        outcome_score: score != null && !Number.isNaN(score) ? score : null,
+        outcome_note: outcomeNote.trim() || null,
+        outcome_at: new Date().toISOString(),
+      });
+      if (updated) setRecord(updated);
+      toast.success("結果を保存しました");
+    } catch (e) {
+      toast.error("結果の保存に失敗しました");
+    } finally {
+      setOutcomeSaving(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-muted-foreground">読み込み中…</div>;
   }
@@ -365,7 +418,7 @@ export default function JudgementDetailPage() {
     return (
       <div className="space-y-4">
         <p className="text-muted-foreground">該当する記録が見つかりません。</p>
-        <Link href="/admin/judgements" className="text-primary underline">
+        <Link href="/admin/judgements" className="cursor-pointer text-primary underline">
           一覧へ戻る
         </Link>
       </div>
@@ -440,208 +493,531 @@ export default function JudgementDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* 左: 入力 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">入力（物件情報）</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <InputDisplay input={input} />
-          </CardContent>
-        </Card>
-
-        {/* 右: 出力 */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <CardTitle className="text-base">判定結果</CardTitle>
-                <Badge variant={verdictVariant}>{verdictLabel}</Badge>
-                <span className="text-muted-foreground text-sm">
-                  信頼度 {output.confidence}%
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {output.reasons.length > 0 && (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <h4 className="mb-1 text-sm font-medium">判定理由</h4>
-                  <ReactMarkdown
-                    components={{
-                      h2: ({ children }) => (
-                        <h2 className="mb-2 mt-4 text-base font-semibold first:mt-0">
-                          {children}
-                        </h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="mb-1.5 mt-3 text-sm font-medium">
-                          {children}
-                        </h3>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="list-inside list-disc space-y-0.5 text-sm">
-                          {children}
-                        </ul>
-                      ),
-                      p: ({ children }) => (
-                        <p className="mb-1 text-sm">{children}</p>
-                      ),
-                    }}
-                  >
-                    {output.reasons.join("\n")}
-                  </ReactMarkdown>
-                </div>
-              )}
-              {output.missing_checks.length > 0 && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium">未確認項目</h4>
-                  <ul className="list-inside list-disc text-sm">
-                    {output.missing_checks.map((c, i) => (
-                      <li key={i}>{c}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {output.risks.length > 0 && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium">リスク</h4>
-                  <ul className="space-y-1 text-sm">
-                    {output.risks.map((risk, i) => (
-                      <li key={i}>
-                        <span className="font-medium">{risk.title}:</span>{" "}
-                        {risk.impact}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {(output.low_points?.length ?? 0) > 0 && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium">低評価ポイント</h4>
-                  <ul className="list-inside list-disc text-sm">
-                    {(output.low_points ?? []).map((p, i) => (
-                      <li key={i}>{p}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {output.recommended_next_actions.length > 0 && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium">推奨アクション</h4>
-                  <ul className="list-inside list-disc text-sm">
-                    {output.recommended_next_actions.map((a, i) => (
-                      <li key={i}>{a}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {record.surrounding_rent_market && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium">周辺家賃相場（参考）</h4>
-                  <p className="text-sm">{record.surrounding_rent_market}</p>
-                </div>
-              )}
-              {record.price_feedback && (
-                <div>
-                  <h4 className="mb-1 text-sm font-medium">希望価格の妥当性</h4>
-                  <p className="mb-1 font-medium text-sm">
-                    {record.price_feedback.verdict}
-                  </p>
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
-                    <ReactMarkdown
-                      components={{
-                        p: ({ children }) => (
-                          <p className="mb-1 text-sm">{children}</p>
-                        ),
-                      }}
-                    >
-                      {record.price_feedback.reasoning}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {record.market_data && (record.market_data.land_price ?? record.market_data.price_per_tsubo ?? record.market_data.nearby_sales) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">地価・坪単価・周辺実売</CardTitle>
-                <CardDescription>
-                  GPT+Web検索により要約（国交省API利用可能後に差し替え可）
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {record.market_data.land_price && (
-                  <p><span className="font-medium">地価:</span> {record.market_data.land_price}</p>
-                )}
-                {record.market_data.price_per_tsubo && (
-                  <p><span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}</p>
-                )}
-                {record.market_data.nearby_sales && (
-                  <p><span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}</p>
-                )}
-              </CardContent>
-            </Card>
+      {/* スマホ: 1列アコーディオン */}
+      <div className="md:hidden w-full">
+        <Accordion
+          type="multiple"
+          defaultValue={["input", "result", "market", "area", "outcome", "prompt"]}
+          className="w-full space-y-1"
+        >
+          <AccordionItem value="input">
+            <AccordionTrigger className="text-base font-medium">入力（物件情報）</AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4">
+                  <InputDisplay input={input} />
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="result">
+            <AccordionTrigger className="text-base font-medium">
+              判定結果 — {verdictLabel} / 信頼度 {output.confidence}%
+            </AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  {output.reasons.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">判定理由</h3>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown
+                          components={{
+                            h2: ({ children }) => (
+                              <h2 className="mb-2 mt-4 text-base font-semibold first:mt-0">{children}</h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="mb-1.5 mt-3 text-sm font-medium">{children}</h3>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className="list-inside list-disc space-y-0.5 text-sm">{children}</ul>
+                            ),
+                            p: ({ children }) => <p className="mb-1 text-sm">{children}</p>,
+                          }}
+                        >
+                          {output.reasons.join("\n")}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                  {output.missing_checks.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">未確認項目</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {output.missing_checks.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {output.risks.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">リスク</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {output.risks.map((risk, i) => (
+                          <li key={i}>
+                            <span className="font-medium">{risk.title}:</span> {risk.impact}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(output.high_points?.length ?? 0) > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">高評価ポイント</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {(output.high_points ?? []).map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(output.low_points?.length ?? 0) > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">低評価ポイント</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {(output.low_points ?? []).map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {output.recommended_next_actions.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">推奨アクション</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {output.recommended_next_actions.map((a, i) => (
+                          <li key={i}>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {record.surrounding_rent_market && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">周辺家賃相場（参考）</h3>
+                      <p className="text-sm">{record.surrounding_rent_market}</p>
+                    </div>
+                  )}
+                  {record.price_feedback && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">希望価格の妥当性</h3>
+                      <p className="mb-1 font-medium text-sm">{record.price_feedback.verdict}</p>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => <p className="mb-1 text-sm">{children}</p>,
+                          }}
+                        >
+                          {record.price_feedback.reasoning}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+          {record.market_data &&
+            (record.market_data.land_price ??
+              record.market_data.price_per_tsubo ??
+              record.market_data.nearby_sales) && (
+              <AccordionItem value="market">
+                <AccordionTrigger className="text-base font-medium">地価・坪単価・周辺実売</AccordionTrigger>
+                <AccordionContent>
+                  <Card>
+                    <CardContent className="pt-4 space-y-2 text-sm">
+                      {record.market_data.land_price && (
+                        <p>
+                          <span className="font-medium">地価:</span> {record.market_data.land_price}
+                        </p>
+                      )}
+                      {record.market_data.price_per_tsubo && (
+                        <p>
+                          <span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}
+                        </p>
+                      )}
+                      {record.market_data.nearby_sales && (
+                        <p>
+                          <span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </AccordionContent>
+              </AccordionItem>
+            )}
+          {record.area_profile && (
+            <AccordionItem value="area">
+              <AccordionTrigger className="text-base font-medium">住所の特徴</AccordionTrigger>
+              <AccordionContent>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-1 text-sm">{children}</p>,
+                          ul: ({ children }) => (
+                            <ul className="list-inside list-disc text-sm">{children}</ul>
+                          ),
+                        }}
+                      >
+                        {record.area_profile.content}
+                      </ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              </AccordionContent>
+            </AccordionItem>
           )}
+          <AccordionItem value="outcome">
+            <AccordionTrigger className="text-base font-medium">
+              結果を記録
+              {(record.outcome_status ?? record.outcome_at) &&
+                ` — ${outcomeStatusLabel(record.outcome_status)}`}
+            </AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>結果</Label>
+                      <Select
+                        value={outcomeStatus}
+                        onValueChange={(v) => setOutcomeStatus(v as OutcomeStatus)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="未記録" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OUTCOME_STATUS_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>スコア（任意・1–5）</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        placeholder="1–5"
+                        value={outcomeScore}
+                        onChange={(e) => setOutcomeScore(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>メモ（任意）</Label>
+                    <Textarea
+                      placeholder="自由メモ"
+                      value={outcomeNote}
+                      onChange={(e) => setOutcomeNote(e.target.value)}
+                      rows={3}
+                      className="resize-none"
+                    />
+                  </div>
+                  <Button onClick={handleSaveOutcome} disabled={outcomeSaving}>
+                    {outcomeSaving ? "保存中…" : "結果を保存"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="prompt">
+            <AccordionTrigger className="text-base font-medium">プロンプトスナップショット</AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4 space-y-2 text-sm">
+                  <p>名称: {prompt_snapshot.name || "—"}</p>
+                  <p>バージョン: {prompt_snapshot.version || "—"}</p>
+                  <p>モデル: {prompt_snapshot.model || "—"}</p>
+                  <p>Temperature: {prompt_snapshot.temperature}</p>
+                  <Accordion type="single" collapsible>
+                    <AccordionItem value="content">
+                      <AccordionTrigger>プロンプト本文</AccordionTrigger>
+                      <AccordionContent>
+                        <pre className="whitespace-pre-wrap break-words rounded bg-muted p-3 text-xs">
+                          {prompt_snapshot.content || "（未設定）"}
+                        </pre>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </div>
+
+      {/* PC: 左右2列、各セクションにアコーディオン */}
+      <div className="hidden md:grid md:gap-6 lg:grid-cols-2">
+        {/* 左: 入力 */}
+        <Accordion type="multiple" defaultValue={["input"]} className="w-full space-y-1">
+          <AccordionItem value="input">
+            <AccordionTrigger className="text-base font-medium">入力（物件情報）</AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4">
+                  <InputDisplay input={input} />
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+
+        {/* 右: 出力（各セクションをアコーディオン） */}
+        <Accordion
+          type="multiple"
+          defaultValue={["result", "market", "area", "outcome", "prompt"]}
+          className="w-full space-y-1"
+        >
+          <AccordionItem value="result">
+            <AccordionTrigger className="text-base font-medium">
+              判定結果 — {verdictLabel} / 信頼度 {output.confidence}%
+            </AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  {output.reasons.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">判定理由</h3>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown
+                          components={{
+                            h2: ({ children }) => (
+                              <h2 className="mb-2 mt-4 text-base font-semibold first:mt-0">{children}</h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="mb-1.5 mt-3 text-sm font-medium">{children}</h3>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className="list-inside list-disc space-y-0.5 text-sm">{children}</ul>
+                            ),
+                            p: ({ children }) => <p className="mb-1 text-sm">{children}</p>,
+                          }}
+                        >
+                          {output.reasons.join("\n")}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                  {output.missing_checks.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">未確認項目</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {output.missing_checks.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {output.risks.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">リスク</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {output.risks.map((risk, i) => (
+                          <li key={i}>
+                            <span className="font-medium">{risk.title}:</span> {risk.impact}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(output.high_points?.length ?? 0) > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">高評価ポイント</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {(output.high_points ?? []).map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(output.low_points?.length ?? 0) > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">低評価ポイント</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {(output.low_points ?? []).map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {output.recommended_next_actions.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">推奨アクション</h3>
+                      <ul className="list-inside list-disc space-y-0.5 text-sm">
+                        {output.recommended_next_actions.map((a, i) => (
+                          <li key={i}>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {record.surrounding_rent_market && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">周辺家賃相場（参考）</h3>
+                      <p className="text-sm">{record.surrounding_rent_market}</p>
+                    </div>
+                  )}
+                  {record.price_feedback && (
+                    <div>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">希望価格の妥当性</h3>
+                      <p className="mb-1 font-medium text-sm">{record.price_feedback.verdict}</p>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown
+                          components={{
+                            p: ({ children }) => <p className="mb-1 text-sm">{children}</p>,
+                          }}
+                        >
+                          {record.price_feedback.reasoning}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+
+          {record.market_data &&
+            (record.market_data.land_price ??
+              record.market_data.price_per_tsubo ??
+              record.market_data.nearby_sales) && (
+              <AccordionItem value="market">
+                <AccordionTrigger className="text-base font-medium">地価・坪単価・周辺実売</AccordionTrigger>
+                <AccordionContent>
+                  <Card>
+                    <CardContent className="pt-4 space-y-2 text-sm">
+                      {record.market_data.land_price && (
+                        <p>
+                          <span className="font-medium">地価:</span> {record.market_data.land_price}
+                        </p>
+                      )}
+                      {record.market_data.price_per_tsubo && (
+                        <p>
+                          <span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}
+                        </p>
+                      )}
+                      {record.market_data.nearby_sales && (
+                        <p>
+                          <span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </AccordionContent>
+              </AccordionItem>
+            )}
 
           {record.area_profile && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  住所の特徴
-                  {record.area_profile.used_web_search
-                    ? "（Web検索 + AI により要約）"
-                    : "（AI により生成）"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <ReactMarkdown
-                    components={{
-                      p: ({ children }) => (
-                        <p className="mb-1 text-sm">{children}</p>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="list-inside list-disc text-sm">
-                          {children}
-                        </ul>
-                      ),
-                    }}
-                  >
-                    {record.area_profile.content}
-                  </ReactMarkdown>
-                </div>
-              </CardContent>
-            </Card>
+            <AccordionItem value="area">
+              <AccordionTrigger className="text-base font-medium">住所の特徴</AccordionTrigger>
+              <AccordionContent>
+                <Card>
+                  <CardContent className="pt-4">
+                    <div className="prose prose-sm max-w-none dark:prose-invert">
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="mb-1 text-sm">{children}</p>,
+                          ul: ({ children }) => (
+                            <ul className="list-inside list-disc text-sm">{children}</ul>
+                          ),
+                        }}
+                      >
+                        {record.area_profile.content}
+                      </ReactMarkdown>
+                    </div>
+                  </CardContent>
+                </Card>
+              </AccordionContent>
+            </AccordionItem>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">プロンプトスナップショット</CardTitle>
-              <CardDescription>
-                判定時点のプロンプト設定
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p>名称: {prompt_snapshot.name || "—"}</p>
-              <p>バージョン: {prompt_snapshot.version || "—"}</p>
-              <p>モデル: {prompt_snapshot.model || "—"}</p>
-              <p>Temperature: {prompt_snapshot.temperature}</p>
-              <Accordion type="single" collapsible>
-                <AccordionItem value="content">
-                  <AccordionTrigger>プロンプト本文</AccordionTrigger>
-                  <AccordionContent>
-                    <pre className="whitespace-pre-wrap break-words rounded bg-muted p-3 text-xs">
-                      {prompt_snapshot.content || "（未設定）"}
-                    </pre>
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </CardContent>
-          </Card>
-        </div>
+          <AccordionItem value="outcome">
+            <AccordionTrigger className="text-base font-medium">
+              結果を記録
+              {(record.outcome_status ?? record.outcome_at) &&
+                ` — ${outcomeStatusLabel(record.outcome_status)}`}
+            </AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4 space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>結果</Label>
+                      <Select
+                        value={outcomeStatus}
+                        onValueChange={(v) => setOutcomeStatus(v as OutcomeStatus)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="未記録" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {OUTCOME_STATUS_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>スコア（任意・1–5）</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={5}
+                        placeholder="1–5"
+                        value={outcomeScore}
+                        onChange={(e) => setOutcomeScore(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>メモ（任意）</Label>
+                    <Textarea
+                      placeholder="自由メモ"
+                      value={outcomeNote}
+                      onChange={(e) => setOutcomeNote(e.target.value)}
+                      rows={3}
+                      className="resize-none"
+                    />
+                  </div>
+                  <Button onClick={handleSaveOutcome} disabled={outcomeSaving}>
+                    {outcomeSaving ? "保存中…" : "結果を保存"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+
+          <AccordionItem value="prompt">
+            <AccordionTrigger className="text-base font-medium">プロンプトスナップショット</AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-4 space-y-2 text-sm">
+                  <p>名称: {prompt_snapshot.name || "—"}</p>
+                  <p>バージョン: {prompt_snapshot.version || "—"}</p>
+                  <p>モデル: {prompt_snapshot.model || "—"}</p>
+                  <p>Temperature: {prompt_snapshot.temperature}</p>
+                  <Accordion type="single" collapsible>
+                    <AccordionItem value="content">
+                      <AccordionTrigger>プロンプト本文</AccordionTrigger>
+                      <AccordionContent>
+                        <pre className="whitespace-pre-wrap break-words rounded bg-muted p-3 text-xs">
+                          {prompt_snapshot.content || "（未設定）"}
+                        </pre>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );

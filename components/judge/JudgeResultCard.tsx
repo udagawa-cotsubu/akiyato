@@ -8,12 +8,14 @@ import type {
   MarketData,
 } from "@/lib/types/judgement";
 
+const sectionTitleClass = "text-sm font-medium mt-4 first:mt-0 mb-1.5";
+
 const mdComponents = {
   h2: ({ children }: { children?: React.ReactNode }) => (
     <h2 className="mb-2 mt-4 text-base font-semibold first:mt-0">{children}</h2>
   ),
   h3: ({ children }: { children?: React.ReactNode }) => (
-    <h3 className="mb-1.5 mt-3 text-sm font-medium">{children}</h3>
+    <h3 className={`${sectionTitleClass}`}>{children}</h3>
   ),
   ul: ({ children }: { children?: React.ReactNode }) => (
     <ul className="list-inside list-disc space-y-0.5 text-sm">{children}</ul>
@@ -62,88 +64,100 @@ export function JudgeResultCard({
         </CardHeader>
         <CardContent className="space-y-4">
           {result.reasons.length > 0 && (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <ReactMarkdown components={mdComponents}>
-              {reasonsMd}
-            </ReactMarkdown>
-          </div>
-        )}
-        {(result.low_points?.length ?? 0) > 0 && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">低評価ポイント</h4>
-            <ul className="list-inside list-disc space-y-0.5 text-sm">
-              {(result.low_points ?? []).map((p, i) => (
-                <li key={i}>{p}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {result.missing_checks.length > 0 && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">未確認項目</h4>
-            <ul className="list-inside list-disc space-y-0.5 text-sm">
-              {result.missing_checks.map((c, i) => (
-                <li key={i}>{c}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {result.risks.length > 0 && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">リスク</h4>
-            <ul className="space-y-2 text-sm">
-              {result.risks.map((risk, i) => (
-                <li key={i}>
-                  <span className="font-medium">{risk.title}:</span>{" "}
-                  {risk.impact}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {result.recommended_next_actions.length > 0 && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">推奨アクション</h4>
-            <ul className="list-inside list-disc space-y-0.5 text-sm">
-              {result.recommended_next_actions.map((a, i) => (
-                <li key={i}>{a}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {surrounding_rent_market && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">周辺家賃相場（参考）</h4>
-            <p className="text-sm">{surrounding_rent_market}</p>
-          </div>
-        )}
-        {market_data && (market_data.land_price ?? market_data.price_per_tsubo ?? market_data.nearby_sales) && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">地価・坪単価・周辺実売（参考）</h4>
-            <div className="space-y-1 text-sm">
-              {market_data.land_price && (
-                <p><span className="font-medium">地価:</span> {market_data.land_price}</p>
-              )}
-              {market_data.price_per_tsubo && (
-                <p><span className="font-medium">坪単価:</span> {market_data.price_per_tsubo}</p>
-              )}
-              {market_data.nearby_sales && (
-                <p><span className="font-medium">周辺実売:</span> {market_data.nearby_sales}</p>
-              )}
+            <div>
+              <h3 className={sectionTitleClass}>判定理由</h3>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown components={mdComponents}>
+                  {reasonsMd}
+                </ReactMarkdown>
+              </div>
             </div>
-          </div>
-        )}
-        {price_feedback && (
-          <div>
-            <h4 className="mb-1 text-sm font-medium">希望価格の妥当性</h4>
-            <p className="mb-1 font-medium text-sm">{price_feedback.verdict}</p>
-            <div className="prose prose-sm max-w-none dark:prose-invert">
-              <ReactMarkdown components={mdComponents}>
-                {price_feedback.reasoning}
-              </ReactMarkdown>
+          )}
+          {result.missing_checks.length > 0 && (
+            <div>
+              <h3 className={sectionTitleClass}>未確認項目</h3>
+              <ul className="list-inside list-disc space-y-0.5 text-sm">
+                {result.missing_checks.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
             </div>
-          </div>
-        )}
+          )}
+          {result.risks.length > 0 && (
+            <div>
+              <h3 className={sectionTitleClass}>リスク</h3>
+              <ul className="list-inside list-disc space-y-0.5 text-sm">
+                {result.risks.map((risk, i) => (
+                  <li key={i}>
+                    <span className="font-medium">{risk.title}:</span> {risk.impact}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(result.high_points?.length ?? 0) > 0 && (
+            <div>
+              <h3 className={sectionTitleClass}>高評価ポイント</h3>
+              <ul className="list-inside list-disc space-y-0.5 text-sm">
+                {(result.high_points ?? []).map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(result.low_points?.length ?? 0) > 0 && (
+            <div>
+              <h3 className={sectionTitleClass}>低評価ポイント</h3>
+              <ul className="list-inside list-disc space-y-0.5 text-sm">
+                {(result.low_points ?? []).map((p, i) => (
+                  <li key={i}>{p}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.recommended_next_actions.length > 0 && (
+            <div>
+              <h3 className={sectionTitleClass}>推奨アクション</h3>
+              <ul className="list-inside list-disc space-y-0.5 text-sm">
+                {result.recommended_next_actions.map((a, i) => (
+                  <li key={i}>{a}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {surrounding_rent_market && (
+            <div>
+              <h3 className={sectionTitleClass}>周辺家賃相場（参考）</h3>
+              <p className="text-sm">{surrounding_rent_market}</p>
+            </div>
+          )}
+          {price_feedback && (
+            <div>
+              <h3 className={sectionTitleClass}>希望価格の妥当性</h3>
+              <p className="mb-1 font-medium text-sm">{price_feedback.verdict}</p>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown components={mdComponents}>
+                  {price_feedback.reasoning}
+                </ReactMarkdown>
+              </div>
+            </div>
+          )}
+          {market_data && (market_data.land_price ?? market_data.price_per_tsubo ?? market_data.nearby_sales) && (
+            <div>
+              <h3 className={sectionTitleClass}>地価・坪単価・周辺実売（参考）</h3>
+              <div className="space-y-1 text-sm">
+                {market_data.land_price && (
+                  <p><span className="font-medium">地価:</span> {market_data.land_price}</p>
+                )}
+                {market_data.price_per_tsubo && (
+                  <p><span className="font-medium">坪単価:</span> {market_data.price_per_tsubo}</p>
+                )}
+                {market_data.nearby_sales && (
+                  <p><span className="font-medium">周辺実売:</span> {market_data.nearby_sales}</p>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

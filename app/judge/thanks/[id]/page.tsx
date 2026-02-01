@@ -33,7 +33,7 @@ export default function JudgeThanksPage() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-4">
         <p className="text-muted-foreground">該当する記録が見つかりません。</p>
-        <Link href="/judge">
+        <Link href="/judge" className="cursor-pointer">
           <Button variant="outline">判定フォームへ</Button>
         </Link>
       </div>
@@ -44,7 +44,7 @@ export default function JudgeThanksPage() {
     <div className="min-h-screen bg-background">
       <header className="border-b border-slate-200 bg-[var(--background)]/98 px-4 py-2.5 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
-          <Link href="/judge" className="flex items-center gap-2.5 shrink-0">
+            <Link href="/judge" className="cursor-pointer flex items-center gap-2.5 shrink-0">
             <img
               src="/logo-bk.svg"
               alt=""
@@ -56,7 +56,7 @@ export default function JudgeThanksPage() {
           </Link>
           <Link
             href="/admin/judgements"
-            className="text-muted-foreground text-sm underline shrink-0"
+            className="cursor-pointer text-muted-foreground text-sm underline shrink-0"
           >
             管理画面
           </Link>
@@ -83,7 +83,7 @@ export default function JudgeThanksPage() {
           />
 
           <p className="text-center text-muted-foreground">
-            <Link href="/judge" className="underline">
+            <Link href="/judge" className="cursor-pointer underline">
               判定フォームに戻る
             </Link>
           </p>

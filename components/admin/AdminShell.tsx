@@ -23,7 +23,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           onClick={() => setMenuOpen(true)}
-          className="flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+          className="cursor-pointer flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-muted"
           aria-label="メニューを開く"
         >
           <MenuIcon className="size-6" />
@@ -46,13 +46,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           >
             <div className="flex h-full flex-col p-4">
               <div className="flex items-center justify-between mb-6">
-                <Link href="/admin" className="text-lg font-semibold" onClick={closeMenu}>
+                <Link href="/admin" className="cursor-pointer text-lg font-semibold" onClick={closeMenu}>
                   管理画面
                 </Link>
                 <button
                   type="button"
                   onClick={closeMenu}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+                  className="cursor-pointer flex size-10 shrink-0 items-center justify-center rounded-md hover:bg-muted"
                   aria-label="メニューを閉じる"
                 >
                   <XIcon className="size-5" />
@@ -64,7 +64,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     key={href}
                     href={href}
                     onClick={closeMenu}
-                    className={`flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                    className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
                       pathname === href ? "bg-muted" : "hover:bg-muted"
                     }`}
                   >
@@ -77,7 +77,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 <Link
                   href="/judge"
                   onClick={closeMenu}
-                  className="text-muted-foreground text-sm underline"
+                  className="cursor-pointer text-muted-foreground text-sm underline"
                 >
                   判定フォームへ
                 </Link>
@@ -91,7 +91,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden w-56 shrink-0 border-r bg-muted/30 md:block">
         <div className="sticky top-0 flex h-screen flex-col p-4">
           <header className="mb-6">
-            <Link href="/admin" className="text-lg font-semibold">
+            <Link href="/admin" className="cursor-pointer text-lg font-semibold">
               管理画面
             </Link>
           </header>
@@ -100,7 +100,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
+                className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
                   pathname === href ? "bg-muted" : ""
                 }`}
               >
@@ -112,7 +112,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <footer className="border-t pt-4">
             <Link
               href="/judge"
-              className="text-muted-foreground text-sm underline"
+              className="cursor-pointer text-muted-foreground text-sm underline"
             >
               判定フォームへ
             </Link>

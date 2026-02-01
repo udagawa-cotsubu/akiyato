@@ -77,6 +77,15 @@ export function formatPropertyInputForPrompt(input: InputWithLegacy): string {
           ? "新耐震（インスペ未実施でも可）"
           : "不明"
   );
+  const taishinLabel = getTaishinLabelFromBuiltYear(input.built_year);
+  if (taishinLabel !== "不明") {
+    add(
+      "※インスペクションの扱い",
+      taishinLabel === "新耐震"
+        ? "新耐震のため判定理由でインスペに言及不要"
+        : "旧耐震のためインスペの有無・結果を重視すること"
+    );
+  }
   add("違反建築・既存不適格の懸念", noncon === "YES" ? "あり" : noncon === "NO" ? "なし" : "不明");
   add("違反建築・既存不適格（コメント）", input.nonconformity_note);
   add("権利関係の懸念", titleR === "YES" ? "あり" : titleR === "NO" ? "なし" : "不明");

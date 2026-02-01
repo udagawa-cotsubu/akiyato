@@ -21,9 +21,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { JudgementRecord } from "@/lib/types/judgement";
+import type { JudgementRecord, OutcomeStatus } from "@/lib/types/judgement";
 import type { Verdict } from "@/lib/types/judgement";
 import { list } from "@/lib/repositories/judgementsRepository";
+
+const OUTCOME_LABELS: Record<OutcomeStatus | "ALL", string> = {
+  ALL: "すべて",
+  pending: "未記録",
+  visited: "訪問",
+  passed: "見送り",
+  acquired: "買取",
+};
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -42,6 +50,7 @@ export default function JudgementsListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [verdictFilter, setVerdictFilter] = useState<Verdict | "ALL">("ALL");
+  const [outcomeFilter, setOutcomeFilter] = useState<OutcomeStatus | "ALL">("ALL");
 
   useEffect(() => {
     list().then((data) => {
@@ -60,6 +69,9 @@ export default function JudgementsListPage() {
         return v === verdictFilter;
       });
     }
+    if (outcomeFilter !== "ALL") {
+      r = r.filter((rec) => (rec.outcome_status ?? "pending") === outcomeFilter);
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       r = r.filter((rec) => {
@@ -72,7 +84,7 @@ export default function JudgementsListPage() {
       });
     }
     return r;
-  }, [records, search, verdictFilter]);
+  }, [records, search, verdictFilter, outcomeFilter]);
 
   if (loading) {
     return <div className="text-muted-foreground">読み込み中…</div>;
@@ -87,7 +99,7 @@ export default function JudgementsListPage() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center">
         <Input
           placeholder="物件名・住所で検索"
           value={search}
@@ -108,6 +120,21 @@ export default function JudgementsListPage() {
             <SelectItem value="HOLD">HOLD</SelectItem>
           </SelectContent>
         </Select>
+        <Select
+          value={outcomeFilter}
+          onValueChange={(v) => setOutcomeFilter(v as OutcomeStatus | "ALL")}
+        >
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="結果で絞り込み" />
+          </SelectTrigger>
+          <SelectContent>
+            {(["ALL", "pending", "visited", "passed", "acquired"] as const).map((k) => (
+              <SelectItem key={k} value={k}>
+                {OUTCOME_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
@@ -121,7 +148,7 @@ export default function JudgementsListPage() {
             {records.length === 0 && (
               <Link
                 href="/judge"
-                className="mt-4 text-primary underline"
+                className="cursor-pointer mt-4 text-primary underline"
               >
                 判定フォームへ
               </Link>
@@ -163,10 +190,11 @@ export default function JudgementsListPage() {
                         {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
                       </Badge>
                     </div>
-                    <div className="mt-2 flex gap-4 text-muted-foreground text-sm">
+                    <div className="mt-2 flex flex-wrap gap-4 text-muted-foreground text-sm">
                       <span>信頼度 {rec.output.confidence}%</span>
                       <span>未確認 {rec.output.missing_checks.length}</span>
                       <span>リスク {rec.output.risks.length}</span>
+                      <span>結果: {OUTCOME_LABELS[rec.outcome_status ?? "pending"]}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -181,6 +209,7 @@ export default function JudgementsListPage() {
                   <TableHead>日時</TableHead>
                   <TableHead>物件名</TableHead>
                   <TableHead>判定</TableHead>
+                  <TableHead>結果</TableHead>
                   <TableHead>信頼度</TableHead>
                   <TableHead className="text-center">未確認</TableHead>
                   <TableHead className="text-center">リスク</TableHead>
@@ -216,6 +245,9 @@ export default function JudgementsListPage() {
                           </Badge>
                         );
                       })()}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {OUTCOME_LABELS[rec.outcome_status ?? "pending"]}
                     </TableCell>
                     <TableCell>{rec.output.confidence}%</TableCell>
                     <TableCell className="text-center">

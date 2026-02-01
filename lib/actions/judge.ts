@@ -80,15 +80,17 @@ export async function runJudge(
   const recommended_next_actions = Array.isArray(obj.recommended_next_actions)
     ? (obj.recommended_next_actions as string[])
     : [];
+  const high_points = Array.isArray(obj.high_points) ? (obj.high_points as string[]) : [];
   const low_points = Array.isArray(obj.low_points) ? (obj.low_points as string[]) : [];
 
   return {
     verdict,
     confidence,
     reasons,
-    low_points,
     missing_checks,
     risks,
+    high_points,
+    low_points,
     recommended_next_actions,
   };
 }

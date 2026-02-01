@@ -15,10 +15,12 @@ export interface JudgementResult {
   verdict: Verdict;
   confidence: number;
   reasons: string[];
-  /** 低評価ポイント（要改善・注意すべき点の箇条書き）。既存データ用に optional */
-  low_points?: string[];
   missing_checks: string[];
   risks: JudgementRisk[];
+  /** 高評価ポイント（良い点の箇条書き）。既存データ用に optional */
+  high_points?: string[];
+  /** 低評価ポイント（要改善・注意すべき点の箇条書き）。既存データ用に optional */
+  low_points?: string[];
   recommended_next_actions: string[];
 }
 
@@ -55,6 +57,16 @@ export interface PromptSnapshot {
 
 export type JudgementRecordStatus = "COMPLETED" | "FAILED";
 
+/** 判定の実際の結果（アウトカム） */
+export type OutcomeStatus = "pending" | "visited" | "passed" | "acquired";
+
+export interface JudgementOutcome {
+  outcome_status?: OutcomeStatus | null;
+  outcome_score?: number | null;
+  outcome_note?: string | null;
+  outcome_at?: string | null;
+}
+
 export interface JudgementRecord {
   id: string;
   created_at: string;
@@ -71,4 +83,12 @@ export interface JudgementRecord {
   surrounding_rent_market?: string | null;
   /** 地価・坪単価・周辺実売など（GPT+Web または 国交省API） */
   market_data?: MarketData | null;
+  /** 実際の結果（未記録/訪問/見送り/買取） */
+  outcome_status?: OutcomeStatus | null;
+  /** 事後のスコア（1-5など、任意） */
+  outcome_score?: number | null;
+  /** 結果の自由メモ */
+  outcome_note?: string | null;
+  /** 結果を記録した日時（ISO文字列） */
+  outcome_at?: string | null;
 }
