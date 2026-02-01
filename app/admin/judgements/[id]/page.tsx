@@ -367,26 +367,27 @@ export default function JudgementDetailPage() {
   }
 
   const { input, output, prompt_snapshot } = record;
+  const v = output.verdict as string;
   const verdictVariant =
-    output.verdict === "GO"
+    v === "GO" || v === "OK"
       ? "default"
-      : output.verdict === "NO_GO"
+      : v === "NO_GO" || v === "NG"
         ? "destructive"
         : "secondary";
-  const verdictLabel = output.verdict === "NO_GO" ? "NO-GO" : output.verdict;
+  const verdictLabel = v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold break-words">
             {input.property_name || "（物件名なし）"}
           </h2>
           <p className="text-muted-foreground text-sm">
             {formatDate(record.created_at)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
           <Button
             variant="outline"
             onClick={handleReJudge}

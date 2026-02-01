@@ -126,61 +126,107 @@ export default function JudgementsListPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>日時</TableHead>
-                <TableHead>物件名</TableHead>
-                <TableHead>判定</TableHead>
-                <TableHead>信頼度</TableHead>
-                <TableHead className="text-center">未確認</TableHead>
-                <TableHead className="text-center">リスク</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((rec) => (
-                <TableRow
+        <>
+          {/* モバイル: カード一覧 */}
+          <div className="space-y-3 md:hidden">
+            {filtered.map((rec) => {
+              const v = rec.output.verdict as string;
+              return (
+                <Card
                   key={rec.id}
-                  className="cursor-pointer hover:bg-muted/50"
+                  className="cursor-pointer transition-colors hover:bg-muted/50 active:bg-muted"
                   onClick={() => router.push(`/admin/judgements/${rec.id}`)}
                 >
-                  <TableCell className="text-muted-foreground text-sm">
-                    {formatDate(rec.created_at)}
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {rec.input.property_name || "（未入力）"}
-                  </TableCell>
-                  <TableCell>
-                    {(() => {
-                      const v = rec.output.verdict as string;
-                      return (
-                        <Badge
-                          variant={
-                            v === "GO" || v === "OK"
-                              ? "default"
-                              : v === "NO_GO" || v === "NG"
-                                ? "destructive"
-                                : "secondary"
-                          }
-                        >
-                          {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
-                        </Badge>
-                      );
-                    })()}
-                  </TableCell>
-                  <TableCell>{rec.output.confidence}%</TableCell>
-                  <TableCell className="text-center">
-                    {rec.output.missing_checks.length}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {rec.output.risks.length}
-                  </TableCell>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">
+                          {rec.input.property_name || "（未入力）"}
+                        </p>
+                        <p className="text-muted-foreground text-xs mt-0.5">
+                          {formatDate(rec.created_at)}
+                        </p>
+                      </div>
+                      <Badge
+                        variant={
+                          v === "GO" || v === "OK"
+                            ? "default"
+                            : v === "NO_GO" || v === "NG"
+                              ? "destructive"
+                              : "secondary"
+                        }
+                        className="shrink-0"
+                      >
+                        {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex gap-4 text-muted-foreground text-sm">
+                      <span>信頼度 {rec.output.confidence}%</span>
+                      <span>未確認 {rec.output.missing_checks.length}</span>
+                      <span>リスク {rec.output.risks.length}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+          {/* デスクトップ: テーブル */}
+          <div className="hidden md:block overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>日時</TableHead>
+                  <TableHead>物件名</TableHead>
+                  <TableHead>判定</TableHead>
+                  <TableHead>信頼度</TableHead>
+                  <TableHead className="text-center">未確認</TableHead>
+                  <TableHead className="text-center">リスク</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((rec) => (
+                  <TableRow
+                    key={rec.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => router.push(`/admin/judgements/${rec.id}`)}
+                  >
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDate(rec.created_at)}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {rec.input.property_name || "（未入力）"}
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const v = rec.output.verdict as string;
+                        return (
+                          <Badge
+                            variant={
+                              v === "GO" || v === "OK"
+                                ? "default"
+                                : v === "NO_GO" || v === "NG"
+                                  ? "destructive"
+                                  : "secondary"
+                            }
+                          >
+                            {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell>{rec.output.confidence}%</TableCell>
+                    <TableCell className="text-center">
+                      {rec.output.missing_checks.length}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {rec.output.risks.length}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
     </div>
   );
