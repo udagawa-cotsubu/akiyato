@@ -32,12 +32,27 @@ export interface AreaProfile {
   used_web_search?: boolean;
 }
 
+/** データ参照元（国交省API または Web検索等） */
+export type DataSource = "mlit" | "web";
+
 /** 希望売却価格の妥当性フィードバック（GPTで周辺相場等を踏まえて生成） */
 export interface PriceFeedback {
   /** 妥当性の結論（例: 妥当 / やや高め / 要検討） */
   verdict: string;
   /** 理由・根拠（Markdown可） */
   reasoning: string;
+  /** 判定に用いた相場データの参照元 */
+  source?: DataSource;
+}
+
+/** 取引価格・坪単価の1行（表形式表示用） */
+export interface PriceTableRow {
+  /** 取引時期（例: 2025年Q3、またはAPIの Period 値） */
+  period: string;
+  /** 取引価格（円） */
+  trade_price_yen?: number;
+  /** 坪単価（円/㎡） */
+  price_per_unit?: number;
 }
 
 /** 地価・坪単価・周辺実売など（GPT+Web または 国交省API で取得、同一構造で格納） */
@@ -45,6 +60,18 @@ export interface MarketData {
   land_price?: string;
   price_per_tsubo?: string;
   nearby_sales?: string;
+  /** 実データの表（国交省API取得時など。日付・数値を表形式で表示） */
+  price_table?: PriceTableRow[];
+  /** 国交省API取得時の生データ（全項目表表示用。最大500件） */
+  transaction_records?: Record<string, unknown>[];
+  /** 参照元: 国交省API または Web */
+  source?: DataSource;
+  /** 国交省APIで取得した場合の対象年（表示用） */
+  year?: number;
+  /** 国交省APIで取得した場合の対象四半期 1〜4（表示用） */
+  quarter?: number;
+  /** 国交省APIで取得した場合の対象地域（表示用・例: 東京都葛飾区、東京都全区） */
+  region_label?: string;
 }
 
 export interface PromptSnapshot {
@@ -81,6 +108,8 @@ export interface JudgementRecord {
   price_feedback?: PriceFeedback | null;
   /** 周辺家賃相場・参考賃料（GPT+Web取得） */
   surrounding_rent_market?: string | null;
+  /** 周辺家賃相場の参照元（国交省に家賃APIはないため現状は web のみ） */
+  surrounding_rent_source?: DataSource | null;
   /** 地価・坪単価・周辺実売など（GPT+Web または 国交省API） */
   market_data?: MarketData | null;
   /** 実際の結果（未記録/訪問/見送り/買取） */

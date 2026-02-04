@@ -75,6 +75,19 @@ export default function AdminApiCheckPage() {
               {result.supabase.message}
             </p>
           </div>
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center gap-2 font-medium">
+              {result.reinfolib.ok ? (
+                <CheckCircle2Icon className="size-5 text-green-600" />
+              ) : (
+                <XCircleIcon className={`size-5 ${result.reinfolib.configured ? "text-destructive" : "text-muted-foreground"}`} />
+              )}
+              <span>不動産情報ライブラリ（国交省）</span>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {result.reinfolib.message}
+            </p>
+          </div>
         </div>
       ) : null}
 

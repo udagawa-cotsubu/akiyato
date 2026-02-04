@@ -16,6 +16,7 @@ export type ApiCheckResult = {
   openai: { ok: boolean; message: string };
   serper: { ok: boolean; configured: boolean; message: string };
   supabase: { ok: boolean; message: string };
+  reinfolib: { ok: boolean; configured: boolean; message: string };
 };
 
 /** OpenAI / Serper / Supabase の接続・利用可否をチェックする */
@@ -83,7 +84,22 @@ export async function checkApis(): Promise<ApiCheckResult> {
     }
   }
 
-  return { openai, serper, supabase };
+  let reinfolib: ApiCheckResult["reinfolib"];
+  const reinfolibKey = process.env.REINFOLIB_MLIT_API_KEY?.trim();
+  if (!reinfolibKey) {
+    reinfolib = { ok: false, configured: false, message: "REINFOLIB_MLIT_API_KEY は未設定です（任意）。設定すると地価・取引価格で国交省APIを利用します。" };
+  } else {
+    try {
+      const { fetchReinfolib } = await import("@/lib/reinfolib/client");
+      await fetchReinfolib("XIT002?area=13");
+      reinfolib = { ok: true, configured: true, message: "接続成功（不動産情報ライブラリAPIが利用できます）" };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      reinfolib = { ok: false, configured: true, message: `接続失敗: ${msg}` };
+    }
+  }
+
+  return { openai, serper, supabase, reinfolib };
 }
 
 /**
@@ -176,10 +192,12 @@ ${webContext ? "上記のWeb検索結果を踏まえつつ、" : ""}一般的な
 
 /**
  * 希望売却価格の妥当性フィードバックを取得（GPT）。
+ * marketData を渡した場合、その内容をプロンプトに含め根拠にし、参照元（国交省/Web）をマークする。
  */
 export async function fetchPriceFeedback(
   address: string,
-  desiredPriceYen: number | undefined
+  desiredPriceYen: number | undefined,
+  marketData?: MarketData | null
 ): Promise<PriceFeedback | null> {
   if (!address?.trim()) return null;
   const openai = getOpenAIClient();
@@ -188,11 +206,26 @@ export async function fetchPriceFeedback(
     return null;
   }
 
+  const source: "mlit" | "web" =
+    marketData?.source === "mlit" ? "mlit" : "web";
+
   try {
     const priceNote =
       desiredPriceYen != null && desiredPriceYen > 0
         ? `希望売却価格: ${(desiredPriceYen / 10000).toLocaleString()}万円`
         : "希望売却価格は未入力";
+
+    let marketContext = "";
+    if (marketData && (marketData.land_price ?? marketData.price_per_tsubo ?? marketData.nearby_sales)) {
+      const parts: string[] = [];
+      if (marketData.land_price) parts.push(`地価: ${marketData.land_price}`);
+      if (marketData.price_per_tsubo) parts.push(`坪単価: ${marketData.price_per_tsubo}`);
+      if (marketData.nearby_sales) parts.push(`周辺実売: ${marketData.nearby_sales}`);
+      marketContext =
+        "\n\n【参考：周辺相場データ】\n" +
+        parts.join("\n") +
+        "\n上記の相場データを根拠の優先材料として、希望価格の妥当性を判定してください。";
+    }
 
     const completion = await openai.chat.completions.create({
       model: OPENAI_LATEST_MODEL,
@@ -202,11 +235,11 @@ export async function fetchPriceFeedback(
           content: `あなたは不動産買取・査定の専門家です。
 住所と希望売却価格を踏まえ、その価格が妥当かどうかを簡潔に判定してください。
 判定は「妥当」「やや高め」「やや安め」「要検討」のいずれかで結論し、理由を2〜3行で述べてください。
-根拠は一般的な相場感・地域性に基づくもので構いません。`,
+参考として周辺相場データ（地価・坪単価・周辺実売）が渡された場合は、それを根拠の優先材料として活用してください。`,
         },
         {
           role: "user",
-          content: `住所: ${address}\n${priceNote}\n\n上記について、希望価格の妥当性を判定し、結論と理由を述べてください。`,
+          content: `住所: ${address}\n${priceNote}${marketContext}\n\n上記について、希望価格の妥当性を判定し、結論と理由を述べてください。`,
         },
       ],
       temperature: 0.3,
@@ -223,7 +256,7 @@ export async function fetchPriceFeedback(
     const verdict = verdictMatch ? verdictMatch[1] : "要検討";
     const reasoning = content.replace(/^(妥当|やや高め|やや安め|要検討)[。\s]*/, "").trim() || content;
 
-    return { verdict, reasoning };
+    return { verdict, reasoning, source };
   } catch (err) {
     console.error("[AI] 希望価格の妥当性の取得に失敗しました:", err instanceof Error ? err.message : err);
     return null;
@@ -384,11 +417,106 @@ ${webContext ? "上記のWeb検索結果を参考にしつつ、" : ""}「〇〇
 }
 
 /**
- * 地価・坪単価・周辺戸建て売買相場を取得（GPT + Web検索）。
- * 国交省API利用可能後は、この関数内の取得ロジックのみAPI実装に差し替える。
+ * 地価・坪単価・周辺戸建て売買相場を取得。
+ * REINFOLIB_MLIT_API_KEY が設定されていれば国交省API（XIT001）を優先し、
+ * 未設定・エラー・該当データなしの場合は GPT + Web検索にフォールバックする。
+ * year は今年、quarter は直近の四半期（1〜4）。データが無い場合は前四半期・前年Q4にフォールバックする。
  */
-export async function fetchMarketData(address: string): Promise<MarketData | null> {
+export async function fetchMarketData(
+  address: string,
+  postalCode?: string | null
+): Promise<MarketData | null> {
+  const reinfolibKey = process.env.REINFOLIB_MLIT_API_KEY?.trim();
+  // #region agent log
+  fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "lib/actions/ai.ts:fetchMarketData", message: "fetchMarketData entry", data: { address: address?.slice(0, 50), hasReinfolibKey: !!reinfolibKey }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H2" }) }).catch(() => {});
+  // #endregion
+  try {
+    console.log("[REINFOLIB] fetchMarketData 呼び出し address=", address?.slice(0, 50), "hasKey=", !!reinfolibKey);
+    const { reinfolibLogBootstrap, getReinfolibLogPath } = await import("@/lib/reinfolib/log");
+    reinfolibLogBootstrap("fetchMarketData", {
+      address: address?.slice(0, 80) ?? "",
+      hasReinfolibKey: !!reinfolibKey,
+      logPath: getReinfolibLogPath(),
+    });
+  } catch (e) {
+    console.warn("[REINFOLIB] bootstrap log failed", e);
+  }
   if (!address?.trim()) return null;
+
+  if (reinfolibKey) {
+    try {
+      const { resolveAreaAndCity } = await import("@/lib/reinfolib/resolve");
+      const { getTransactionPrices, mergeMarketDataFromQuarters } = await import("@/lib/reinfolib/client");
+      const resolved = await resolveAreaAndCity(address, postalCode ?? undefined);
+      // #region agent log
+      fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ location: "lib/actions/ai.ts:after resolve", message: "resolveAreaAndCity result", data: { resolved: !!resolved, areaCode: resolved?.areaCode, cityCode: resolved?.cityCode ?? null }, timestamp: Date.now(), sessionId: "debug-session", hypothesisId: "H3" }) }).catch(() => {});
+      // #endregion
+      if (resolved) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const { getCities } = await import("@/lib/reinfolib/client");
+        const { prefectureCodeToName } = await import("@/lib/reinfolib/prefecture");
+        const cities = await getCities(resolved.areaCode);
+        const prefectureName = prefectureCodeToName(resolved.areaCode) ?? "";
+        const regionLabelPrimary =
+          resolved.cityCode ? `${prefectureName}${cities.find((c) => c.id === resolved.cityCode)?.name ?? ""}` : `${prefectureName}全区`;
+
+        /** 過去に確実に公開済みの四半期のみ。直近1年〜3年前（当年・当四半期は含めない） */
+        const buildAttempts = (): { year: number; quarter: number }[] => {
+          const out: { year: number; quarter: number }[] = [];
+          for (let y = year - 1; y >= year - 3; y--) {
+            for (let q = 4; q >= 1; q--) {
+              out.push({ year: y, quarter: q });
+            }
+          }
+          return out;
+        };
+
+        const attempts = buildAttempts();
+
+        const collectQuarters = async (
+          cityCode: string | undefined,
+          regionLabel: string
+        ): Promise<{ records: Awaited<ReturnType<typeof getTransactionPrices>>; year: number; quarter: number; regionLabel: string }[]> => {
+          const collected: { records: Awaited<ReturnType<typeof getTransactionPrices>>; year: number; quarter: number; regionLabel: string }[] = [];
+          for (const { year: y, quarter: q } of attempts) {
+            const records = await getTransactionPrices({
+              year: y,
+              quarter: q,
+              area: resolved.areaCode,
+              city: cityCode,
+            });
+            if (records.length > 0) {
+              collected.push({ records, year: y, quarter: q, regionLabel });
+            }
+          }
+          return collected;
+        };
+
+        const cityParts = await collectQuarters(resolved.cityCode ?? undefined, regionLabelPrimary);
+        if (cityParts.length > 0) {
+          return mergeMarketDataFromQuarters(cityParts);
+        }
+
+        const areaParts = await collectQuarters(undefined, `${prefectureName}全区`);
+        if (areaParts.length > 0) {
+          return mergeMarketDataFromQuarters(areaParts);
+        }
+
+        const otherCities = cities.filter((c) => c.id !== (resolved.cityCode ?? ""));
+        for (const other of otherCities.slice(0, 3)) {
+          const otherParts = await collectQuarters(other.id, `${prefectureName}${other.name}`);
+          if (otherParts.length > 0) {
+            return mergeMarketDataFromQuarters(otherParts);
+          }
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[AI] 国交省API リクエストエラー（パラメータや認証の確認を推奨）:", msg);
+    }
+  }
+
   const openai = getOpenAIClient();
   if (!openai) {
     console.error("[AI] OPENAI_API_KEY が設定されていません。");
@@ -462,12 +590,12 @@ ${webContext ? "上記のWeb検索結果を踏まえつつ、" : ""}一般的な
     const pricePerTsuboMatch = content.match(/price_per_tsubo[：:]\s*([^\n]+)/i) ?? content.match(/坪単価[：:]\s*([^\n]+)/);
     const nearbySalesMatch = content.match(/nearby_sales[：:]\s*([^\n]+)/i) ?? content.match(/周辺[^\n]*売買[：:]\s*([^\n]+)/);
 
-    const result: MarketData = {};
+    const result: MarketData = { source: "web" };
     if (landPriceMatch?.[1]) result.land_price = landPriceMatch[1].trim();
     if (pricePerTsuboMatch?.[1]) result.price_per_tsubo = pricePerTsuboMatch[1].trim();
     if (nearbySalesMatch?.[1]) result.nearby_sales = nearbySalesMatch[1].trim();
 
-    if (Object.keys(result).length === 0) {
+    if (Object.keys(result).length === 1) {
       result.land_price = content.slice(0, 200);
     }
     return result;

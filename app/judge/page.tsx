@@ -99,12 +99,16 @@ function JudgePageContent() {
         model: OPENAI_LATEST_MODEL,
         temperature: settings.temperature,
       };
-      const [area_profile, price_feedback, surrounding_rent_market, market_data] = await Promise.all([
+      const [area_profile, surrounding_rent_market, market_data] = await Promise.all([
         fetchAreaProfile(input.address),
-        fetchPriceFeedback(input.address, input.desired_sale_price_yen),
         fetchSurroundingRentMarket(input.address),
-        fetchMarketData(input.address),
+        fetchMarketData(input.address, input.postal_code),
       ]);
+      const price_feedback = await fetchPriceFeedback(
+        input.address,
+        input.desired_sale_price_yen,
+        market_data ?? undefined
+      );
       if (area_profile == null && price_feedback == null && input.address?.trim()) {
         toast.error(
           "希望価格の妥当性・住所の特徴を取得できませんでした。.env.local の OPENAI_API_KEY を確認し、開発サーバー（npm run dev）を再起動してください。"
@@ -119,6 +123,7 @@ function JudgePageContent() {
         area_profile: area_profile ?? null,
         price_feedback: price_feedback ?? null,
         surrounding_rent_market: surrounding_rent_market ?? null,
+        surrounding_rent_source: surrounding_rent_market ? "web" : null,
         market_data: market_data ?? null,
       });
       router.push(`/judge/thanks/${record.id}`);

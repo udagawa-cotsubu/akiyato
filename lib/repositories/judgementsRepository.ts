@@ -14,6 +14,7 @@ function toRecord(row: {
   area_profile?: JudgementRecord["area_profile"];
   price_feedback?: JudgementRecord["price_feedback"];
   surrounding_rent_market?: string | null;
+  surrounding_rent_source?: JudgementRecord["surrounding_rent_source"];
   market_data?: JudgementRecord["market_data"];
   outcome_status?: JudgementRecord["outcome_status"];
   outcome_score?: number | null;
@@ -31,6 +32,7 @@ function toRecord(row: {
     area_profile: row.area_profile ?? undefined,
     price_feedback: row.price_feedback ?? undefined,
     surrounding_rent_market: row.surrounding_rent_market ?? undefined,
+    surrounding_rent_source: row.surrounding_rent_source ?? undefined,
     market_data: row.market_data ?? undefined,
     outcome_status: row.outcome_status ?? undefined,
     outcome_score: row.outcome_score ?? undefined,
@@ -75,6 +77,7 @@ export async function create(
       area_profile: record.area_profile ?? null,
       price_feedback: record.price_feedback ?? null,
       surrounding_rent_market: record.surrounding_rent_market ?? null,
+      surrounding_rent_source: record.surrounding_rent_source ?? null,
       market_data: record.market_data ?? null,
     })
     .select()
@@ -87,6 +90,13 @@ export async function deleteRecord(id: string): Promise<void> {
   const supabase = getSupabaseBrowser();
   const { error } = await supabase.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(`判定の削除に失敗しました: ${error.message}`);
+}
+
+export async function deleteMany(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const supabase = getSupabaseBrowser();
+  const { error } = await supabase.from(TABLE).delete().in("id", ids);
+  if (error) throw new Error(`判定の一括削除に失敗しました: ${error.message}`);
 }
 
 export async function updateOutcome(

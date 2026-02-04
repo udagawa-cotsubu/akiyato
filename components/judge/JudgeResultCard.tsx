@@ -6,6 +6,7 @@ import type {
   AreaProfile,
   PriceFeedback,
   MarketData,
+  DataSource,
 } from "@/lib/types/judgement";
 
 const sectionTitleClass = "text-sm font-medium mt-4 first:mt-0 mb-1.5";
@@ -30,6 +31,7 @@ export function JudgeResultCard({
   area_profile,
   price_feedback,
   surrounding_rent_market,
+  surrounding_rent_source,
   market_data,
 }: {
   result: JudgementResult;
@@ -37,7 +39,9 @@ export function JudgeResultCard({
   price_feedback?: PriceFeedback | null;
   /** 周辺家賃相場・参考賃料（GPT+Web取得） */
   surrounding_rent_market?: string | null;
-  /** 地価・坪単価・周辺実売（GPT+Web取得） */
+  /** 周辺家賃相場の参照元（国交省に家賃APIはないため現状は web のみ） */
+  surrounding_rent_source?: DataSource | null;
+  /** 地価・坪単価・周辺実売（国交省API または GPT+Web） */
   market_data?: MarketData | null;
 }) {
   const verdictVariant =
@@ -54,12 +58,11 @@ export function JudgeResultCard({
         <CardHeader className="pb-2">
           <div className="flex flex-wrap items-center gap-2">
             <CardTitle className="text-lg">判定結果</CardTitle>
-            <Badge variant={verdictVariant} className="text-base">
-              {verdictLabel}
-            </Badge>
-            <span className="text-muted-foreground text-sm">
-              信頼度 {result.confidence}%
-            </span>
+            {(result.verdict === "GO" || result.verdict === "NO_GO") && (
+              <Badge variant={verdictVariant} className="text-base">
+                {verdictLabel}
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -142,44 +145,8 @@ export function JudgeResultCard({
               </div>
             </div>
           )}
-          {market_data && (market_data.land_price ?? market_data.price_per_tsubo ?? market_data.nearby_sales) && (
-            <div>
-              <h3 className={sectionTitleClass}>地価・坪単価・周辺実売（参考）</h3>
-              <div className="space-y-1 text-sm">
-                {market_data.land_price && (
-                  <p><span className="font-medium">地価:</span> {market_data.land_price}</p>
-                )}
-                {market_data.price_per_tsubo && (
-                  <p><span className="font-medium">坪単価:</span> {market_data.price_per_tsubo}</p>
-                )}
-                {market_data.nearby_sales && (
-                  <p><span className="font-medium">周辺実売:</span> {market_data.nearby_sales}</p>
-                )}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
-
-      {area_profile && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              住所の特徴
-              {area_profile.used_web_search
-                ? "（Web検索 + AI により要約）"
-                : "（AI により生成）"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="prose prose-sm max-w-none dark:prose-invert">
-              <ReactMarkdown components={mdComponents}>
-                {area_profile.content}
-              </ReactMarkdown>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

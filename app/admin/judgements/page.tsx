@@ -23,7 +23,8 @@ import {
 } from "@/components/ui/table";
 import type { JudgementRecord, OutcomeStatus } from "@/lib/types/judgement";
 import type { Verdict } from "@/lib/types/judgement";
-import { list } from "@/lib/repositories/judgementsRepository";
+import { list, deleteMany } from "@/lib/repositories/judgementsRepository";
+import { Button } from "@/components/ui/button";
 
 const OUTCOME_LABELS: Record<OutcomeStatus | "ALL", string> = {
   ALL: "すべて",
@@ -51,6 +52,8 @@ export default function JudgementsListPage() {
   const [search, setSearch] = useState("");
   const [verdictFilter, setVerdictFilter] = useState<Verdict | "ALL">("ALL");
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeStatus | "ALL">("ALL");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     list().then((data) => {
@@ -85,6 +88,37 @@ export default function JudgementsListPage() {
     }
     return r;
   }, [records, search, verdictFilter, outcomeFilter]);
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => {
+    setSelectedIds(new Set(filtered.map((r) => r.id)));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`${ids.length}件を削除しますか？この操作は取り消せません。`)) return;
+    setDeleting(true);
+    try {
+      await deleteMany(ids);
+      setRecords((prev) => prev.filter((r) => !selectedIds.has(r.id)));
+      setSelectedIds(new Set());
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "削除に失敗しました");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return <div className="text-muted-foreground">読み込み中…</div>;
@@ -135,6 +169,22 @@ export default function JudgementsListPage() {
             ))}
           </SelectContent>
         </Select>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-sm">{selectedIds.size}件選択中</span>
+            <Button variant="outline" size="sm" onClick={clearSelection}>
+              選択解除
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={deleting}
+            >
+              {deleting ? "削除中…" : `一括削除（${selectedIds.size}件）`}
+            </Button>
+          </div>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -177,18 +227,27 @@ export default function JudgementsListPage() {
                           {formatDate(rec.created_at)}
                         </p>
                       </div>
-                      <Badge
-                        variant={
-                          v === "GO" || v === "OK"
-                            ? "default"
-                            : v === "NO_GO" || v === "NG"
-                              ? "destructive"
-                              : "secondary"
-                        }
-                        className="shrink-0"
-                      >
-                        {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
-                      </Badge>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(rec.id)}
+                          onChange={() => toggleSelection(rec.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-input"
+                          aria-label={`${rec.input.property_name || rec.id} を選択`}
+                        />
+                        <Badge
+                          variant={
+                            v === "GO" || v === "OK"
+                              ? "default"
+                              : v === "NO_GO" || v === "NG"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {v === "NO_GO" || v === "NG" ? "NO-GO" : v === "OK" ? "GO" : v}
+                        </Badge>
+                      </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-4 text-muted-foreground text-sm">
                       <span>信頼度 {rec.output.confidence}%</span>
@@ -213,6 +272,21 @@ export default function JudgementsListPage() {
                   <TableHead>信頼度</TableHead>
                   <TableHead className="text-center">未確認</TableHead>
                   <TableHead className="text-center">リスク</TableHead>
+                  <TableHead className="w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filtered.length > 0 &&
+                        filtered.every((r) => selectedIds.has(r.id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) selectAllFiltered();
+                        else clearSelection();
+                      }}
+                      className="h-4 w-4 rounded border-input"
+                      aria-label="すべて選択"
+                    />
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -255,6 +329,18 @@ export default function JudgementsListPage() {
                     </TableCell>
                     <TableCell className="text-center">
                       {rec.output.risks.length}
+                    </TableCell>
+                    <TableCell
+                      className="w-12 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(rec.id)}
+                        onChange={() => toggleSelection(rec.id)}
+                        className="h-4 w-4 rounded border-input"
+                        aria-label={`${rec.input.property_name || rec.id} を選択`}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

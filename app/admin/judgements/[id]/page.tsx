@@ -31,6 +31,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import type {
   PropertyInput,
   TiltType,
@@ -41,6 +49,7 @@ import type {
 } from "@/lib/types/property";
 import { getTaishinLabelFromBuiltYear } from "@/lib/utils";
 import type { JudgementRecord, OutcomeStatus } from "@/lib/types/judgement";
+import { XIT001_COLUMN_KEYS, XIT001_COLUMN_LABELS } from "@/lib/reinfolib/transactionTableColumns";
 import { fetchAreaProfile, fetchPriceFeedback, fetchSurroundingRentMarket, fetchMarketData } from "@/lib/actions/ai";
 import { propertyInputToFormValues } from "@/lib/schemas/propertyInput";
 import { getById, create as createJudgement, deleteRecord, updateOutcome } from "@/lib/repositories/judgementsRepository";
@@ -325,6 +334,7 @@ export default function JudgementDetailPage() {
   const [outcomeStatus, setOutcomeStatus] = useState<OutcomeStatus>("pending");
   const [outcomeScore, setOutcomeScore] = useState("");
   const [outcomeNote, setOutcomeNote] = useState("");
+  const [showTransactionTable, setShowTransactionTable] = useState(false);
 
   useEffect(() => {
     getById(id).then((r) => {
@@ -353,15 +363,16 @@ export default function JudgementDetailPage() {
         model: OPENAI_LATEST_MODEL,
         temperature: settings.temperature,
       };
-      const [area_profile, price_feedback, surrounding_rent_market, market_data] = await Promise.all([
+      const [area_profile, surrounding_rent_market, market_data] = await Promise.all([
         fetchAreaProfile(record.input.address),
-        fetchPriceFeedback(
-          record.input.address,
-          record.input.desired_sale_price_yen
-        ),
         fetchSurroundingRentMarket(record.input.address),
-        fetchMarketData(record.input.address),
+        fetchMarketData(record.input.address, record.input.postal_code),
       ]);
+      const price_feedback = await fetchPriceFeedback(
+        record.input.address,
+        record.input.desired_sale_price_yen,
+        market_data ?? undefined
+      );
       const newRecord = await createJudgement({
         input: record.input,
         output,
@@ -370,6 +381,7 @@ export default function JudgementDetailPage() {
         area_profile: area_profile ?? null,
         price_feedback: price_feedback ?? null,
         surrounding_rent_market: surrounding_rent_market ?? null,
+        surrounding_rent_source: surrounding_rent_market ? "web" : null,
         market_data: market_data ?? null,
       });
       toast.success("再判定を保存しました");
@@ -594,13 +606,25 @@ export default function JudgementDetailPage() {
                   )}
                   {record.surrounding_rent_market && (
                     <div>
-                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">周辺家賃相場（参考）</h3>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">
+                        周辺家賃相場（参考）
+                        <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          {record.surrounding_rent_source === "mlit" ? "参照: 国交省" : "参照: Web"}
+                        </span>
+                      </h3>
                       <p className="text-sm">{record.surrounding_rent_market}</p>
                     </div>
                   )}
                   {record.price_feedback && (
                     <div>
-                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">希望価格の妥当性</h3>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">
+                        希望価格の妥当性
+                        {record.price_feedback.source && (
+                          <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                            {record.price_feedback.source === "mlit" ? "参照: 国交省" : "参照: Web"}
+                          </span>
+                        )}
+                      </h3>
                       <p className="mb-1 font-medium text-sm">{record.price_feedback.verdict}</p>
                       <div className="prose prose-sm max-w-none dark:prose-invert">
                         <ReactMarkdown
@@ -620,26 +644,96 @@ export default function JudgementDetailPage() {
           {record.market_data &&
             (record.market_data.land_price ??
               record.market_data.price_per_tsubo ??
-              record.market_data.nearby_sales) && (
+              record.market_data.nearby_sales ??
+              (record.market_data.transaction_records && record.market_data.transaction_records.length > 0)) && (
               <AccordionItem value="market">
-                <AccordionTrigger className="text-base font-medium">地価・坪単価・周辺実売</AccordionTrigger>
+                <AccordionTrigger className="text-base font-medium">
+                  地価・坪単価・周辺実売
+                  <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground font-normal">
+                    {record.market_data.source === "mlit"
+                      ? `参照: 国交省${record.market_data.region_label
+                        ? `（${record.market_data.year != null && record.market_data.quarter != null ? `${record.market_data.year}年Q${record.market_data.quarter} ` : ""}${record.market_data.region_label}）`
+                        : record.market_data.year != null && record.market_data.quarter != null
+                          ? `（${record.market_data.year}年Q${record.market_data.quarter}）`
+                          : ""}`
+                      : record.market_data.source === "web"
+                        ? "参照: Web"
+                        : ""}
+                  </span>
+                </AccordionTrigger>
                 <AccordionContent>
                   <Card>
-                    <CardContent className="pt-4 space-y-2 text-sm">
-                      {record.market_data.land_price && (
-                        <p>
-                          <span className="font-medium">地価:</span> {record.market_data.land_price}
-                        </p>
-                      )}
-                      {record.market_data.price_per_tsubo && (
-                        <p>
-                          <span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}
-                        </p>
-                      )}
-                      {record.market_data.nearby_sales && (
-                        <p>
-                          <span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}
-                        </p>
+                    <CardContent className="pt-4 space-y-4 text-sm">
+                      <div className="space-y-2">
+                        {record.market_data.land_price && (
+                          <p>
+                            <span className="font-medium">地価:</span> {record.market_data.land_price}
+                          </p>
+                        )}
+                        {record.market_data.price_per_tsubo && (
+                          <p>
+                            <span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}
+                          </p>
+                        )}
+                        {record.market_data.nearby_sales && (
+                          <p>
+                            <span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}
+                          </p>
+                        )}
+                      </div>
+                      {record.market_data.transaction_records && record.market_data.transaction_records.length > 0 && (
+                        <div className="space-y-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowTransactionTable((v) => !v)}
+                          >
+                            {showTransactionTable ? "取引情報を閉じる" : "直近の取引情報はこちら"}
+                          </Button>
+                          {showTransactionTable && (
+                            <div className="overflow-x-auto rounded-md border max-h-[70vh] overflow-y-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    {XIT001_COLUMN_KEYS.map((key) => (
+                                      <TableHead key={key} className="whitespace-nowrap text-left">
+                                        {XIT001_COLUMN_LABELS[key] ?? key}
+                                      </TableHead>
+                                    ))}
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {record.market_data.transaction_records.map((row, i) => (
+                                    <TableRow key={i}>
+                                      {XIT001_COLUMN_KEYS.map((key) => {
+                                        const val = row[key];
+                                        if (val === undefined || val === null || val === "") {
+                                          return (
+                                            <TableCell key={key} className="whitespace-nowrap text-sm">—</TableCell>
+                                          );
+                                        }
+                                        if (key === "TradePrice") {
+                                          const n = typeof val === "number" ? val : Number(String(val).replace(/,/g, ""));
+                                          return (
+                                            <TableCell key={key} className="whitespace-nowrap text-sm tabular-nums">
+                                              {!Number.isNaN(n) ? `${(n / 10000).toLocaleString()}万円` : String(val)}
+                                            </TableCell>
+                                          );
+                                        }
+                                        return (
+                                          <TableCell key={key} className="whitespace-nowrap text-sm">
+                                            {typeof val === "number" ? val.toLocaleString() : String(val)}
+                                          </TableCell>
+                                        );
+                                      })}
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
@@ -858,13 +952,25 @@ export default function JudgementDetailPage() {
                   )}
                   {record.surrounding_rent_market && (
                     <div>
-                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">周辺家賃相場（参考）</h3>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">
+                        周辺家賃相場（参考）
+                        <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                          {record.surrounding_rent_source === "mlit" ? "参照: 国交省" : "参照: Web"}
+                        </span>
+                      </h3>
                       <p className="text-sm">{record.surrounding_rent_market}</p>
                     </div>
                   )}
                   {record.price_feedback && (
                     <div>
-                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">希望価格の妥当性</h3>
+                      <h3 className="text-sm font-medium mt-4 first:mt-0 mb-1.5">
+                        希望価格の妥当性
+                        {record.price_feedback.source && (
+                          <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                            {record.price_feedback.source === "mlit" ? "参照: 国交省" : "参照: Web"}
+                          </span>
+                        )}
+                      </h3>
                       <p className="mb-1 font-medium text-sm">{record.price_feedback.verdict}</p>
                       <div className="prose prose-sm max-w-none dark:prose-invert">
                         <ReactMarkdown
@@ -885,26 +991,96 @@ export default function JudgementDetailPage() {
           {record.market_data &&
             (record.market_data.land_price ??
               record.market_data.price_per_tsubo ??
-              record.market_data.nearby_sales) && (
+              record.market_data.nearby_sales ??
+              (record.market_data.transaction_records && record.market_data.transaction_records.length > 0)) && (
               <AccordionItem value="market">
-                <AccordionTrigger className="text-base font-medium">地価・坪単価・周辺実売</AccordionTrigger>
+                <AccordionTrigger className="text-base font-medium">
+                  地価・坪単価・周辺実売
+                  <span className="ml-2 inline-block rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground font-normal">
+                    {record.market_data.source === "mlit"
+                      ? `参照: 国交省${record.market_data.region_label
+                        ? `（${record.market_data.year != null && record.market_data.quarter != null ? `${record.market_data.year}年Q${record.market_data.quarter} ` : ""}${record.market_data.region_label}）`
+                        : record.market_data.year != null && record.market_data.quarter != null
+                          ? `（${record.market_data.year}年Q${record.market_data.quarter}）`
+                          : ""}`
+                      : record.market_data.source === "web"
+                        ? "参照: Web"
+                        : ""}
+                  </span>
+                </AccordionTrigger>
                 <AccordionContent>
                   <Card>
-                    <CardContent className="pt-4 space-y-2 text-sm">
-                      {record.market_data.land_price && (
-                        <p>
-                          <span className="font-medium">地価:</span> {record.market_data.land_price}
-                        </p>
-                      )}
-                      {record.market_data.price_per_tsubo && (
-                        <p>
-                          <span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}
-                        </p>
-                      )}
-                      {record.market_data.nearby_sales && (
-                        <p>
-                          <span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}
-                        </p>
+                    <CardContent className="pt-4 space-y-4 text-sm">
+                      <div className="space-y-2">
+                        {record.market_data.land_price && (
+                          <p>
+                            <span className="font-medium">地価:</span> {record.market_data.land_price}
+                          </p>
+                        )}
+                        {record.market_data.price_per_tsubo && (
+                          <p>
+                            <span className="font-medium">坪単価:</span> {record.market_data.price_per_tsubo}
+                          </p>
+                        )}
+                        {record.market_data.nearby_sales && (
+                          <p>
+                            <span className="font-medium">周辺戸建て売買相場:</span> {record.market_data.nearby_sales}
+                          </p>
+                        )}
+                      </div>
+                      {record.market_data.transaction_records && record.market_data.transaction_records.length > 0 && (
+                        <div className="space-y-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowTransactionTable((v) => !v)}
+                          >
+                            {showTransactionTable ? "取引情報を閉じる" : "直近の取引情報はこちら"}
+                          </Button>
+                          {showTransactionTable && (
+                            <div className="overflow-x-auto rounded-md border max-h-[70vh] overflow-y-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    {XIT001_COLUMN_KEYS.map((key) => (
+                                      <TableHead key={key} className="whitespace-nowrap text-left">
+                                        {XIT001_COLUMN_LABELS[key] ?? key}
+                                      </TableHead>
+                                    ))}
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {record.market_data.transaction_records.map((row, i) => (
+                                    <TableRow key={i}>
+                                      {XIT001_COLUMN_KEYS.map((key) => {
+                                        const val = row[key];
+                                        if (val === undefined || val === null || val === "") {
+                                          return (
+                                            <TableCell key={key} className="whitespace-nowrap text-sm">—</TableCell>
+                                          );
+                                        }
+                                        if (key === "TradePrice") {
+                                          const n = typeof val === "number" ? val : Number(String(val).replace(/,/g, ""));
+                                          return (
+                                            <TableCell key={key} className="whitespace-nowrap text-sm tabular-nums">
+                                              {!Number.isNaN(n) ? `${(n / 10000).toLocaleString()}万円` : String(val)}
+                                            </TableCell>
+                                          );
+                                        }
+                                        return (
+                                          <TableCell key={key} className="whitespace-nowrap text-sm">
+                                            {typeof val === "number" ? val.toLocaleString() : String(val)}
+                                          </TableCell>
+                                        );
+                                      })}
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </CardContent>
                   </Card>
