@@ -24,7 +24,7 @@ export default function AdminLoginPage() {
         return;
       }
       toast.success("ログインしました");
-      router.push("/admin");
+      router.push("/admin/judgements");
     } finally {
       setLoading(false);
     }
