@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useLodgingAuth } from "@/lib/lodging/useLodgingAuth";
 import { fetchInns, fetchReservations } from "@/lib/lodging/repository";
 import type { Inn, Reservation } from "@/lib/types/lodging";
 import { buildStayNights, buildWeeklyOccupancy, getDashboardWeekRange } from "@/lib/lodging/metrics";
@@ -14,49 +12,31 @@ import {
 import { Switch } from "@/components/ui/switch";
 
 export default function LodgingOccupancyPage() {
-  const router = useRouter();
-  const { authenticated, requireAuth } = useLodgingAuth();
-
   const [inns, setInns] = useState<Inn[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [compareByYear, setCompareByYear] = useState(true);
 
   useEffect(() => {
-    requireAuth();
-  }, [requireAuth]);
-
-  useEffect(() => {
-    if (authenticated === false) {
-      router.replace("/admin/lodging/login");
-    }
-  }, [authenticated, router]);
-
-  useEffect(() => {
-    if (!authenticated) return;
     void (async () => {
       const [innList, reservationList] = await Promise.all([fetchInns(), fetchReservations()]);
       setInns(innList);
       setReservations(reservationList);
     })();
-  }, [authenticated]);
+  }, []);
 
   const dashboardWeeks = useMemo(() => getDashboardWeekRange(), []);
   const chartMinWidth = dashboardWeeks.length * 22;
 
   const weeklyOccupancy = useMemo(() => {
-    if (!reservations.length || !authenticated) return [];
+    if (!reservations.length) return [];
     const stayNights = buildStayNights(reservations);
     return buildWeeklyOccupancy(stayNights);
-  }, [reservations, authenticated]);
+  }, [reservations]);
 
   const sortedInns = useMemo(
     () => [...inns].sort((a, b) => a.name.localeCompare(b.name, "ja")),
     [inns],
   );
-
-  if (!authenticated) {
-    return <div className="text-muted-foreground">読み込み中…</div>;
-  }
 
   return (
     <div className="space-y-6">

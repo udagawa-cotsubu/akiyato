@@ -54,12 +54,6 @@ export default function JudgeThanksPage() {
             />
             <span className="text-lg font-semibold tracking-tight">物件判定AI</span>
           </Link>
-          <Link
-            href="/admin/judgements"
-            className="cursor-pointer text-muted-foreground text-sm underline shrink-0"
-          >
-            管理画面
-          </Link>
         </div>
       </header>
 

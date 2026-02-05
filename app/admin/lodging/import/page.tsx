@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useLodgingAuth } from "@/lib/lodging/useLodgingAuth";
 import { importCsvTexts, fetchInns, fetchReservations, resetLodgingData } from "@/lib/lodging/repository";
 import type { Inn, Reservation, ReservationFilter } from "@/lib/types/lodging";
 import { Button } from "@/components/ui/button";
@@ -26,9 +24,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export default function LodgingImportPage() {
-  const router = useRouter();
-  const { authenticated, requireAuth } = useLodgingAuth();
-
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [inns, setInns] = useState<Inn[]>([]);
@@ -36,23 +31,12 @@ export default function LodgingImportPage() {
   const [filter, setFilter] = useState<ReservationFilter>({});
 
   useEffect(() => {
-    requireAuth();
-  }, [requireAuth]);
-
-  useEffect(() => {
-    if (authenticated === false) {
-      router.replace("/admin/lodging/login");
-    }
-  }, [authenticated, router]);
-
-  useEffect(() => {
-    if (!authenticated) return;
     void (async () => {
       const [innList, reservationList] = await Promise.all([fetchInns(), fetchReservations()]);
       setInns(innList);
       setReservations(reservationList);
     })();
-  }, [authenticated]);
+  }, []);
 
   const filteredReservations = useMemo(() => {
     if (!reservations.length) return [];
@@ -129,10 +113,6 @@ export default function LodgingImportPage() {
     event.stopPropagation();
     setDragActive(false);
   };
-
-  if (!authenticated) {
-    return <div className="text-muted-foreground">読み込み中…</div>;
-  }
 
   return (
     <div className="space-y-6">

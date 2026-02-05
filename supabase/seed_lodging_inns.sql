@@ -1,15 +1,22 @@
--- 宿管理のモックデータを lodging_inns に投入するスクリプト
+-- lodging_inns を正しいデータで入れ直す
 -- Supabase ダッシュボードの SQL Editor で実行してください。
--- 2回目以降に実行する場合は、先に「delete from public.lodging_reservations; delete from public.lodging_inns;」で消してから実行するか、重複を許容してください。
+-- 宿名は「001.Sea Side 椿」形式、コード（001,002…）順に並びます。
 
+-- 1. 予約を先に削除（lodging_inns への外部キーがあるため）
+delete from public.lodging_reservations;
+
+-- 2. 宿を全削除
+delete from public.lodging_inns;
+
+-- 3. 正しい宿データを投入（宿名＝コード.名前、tag＝コード）
 insert into public.lodging_inns (name, tag)
 values
-  ('Sea Side 椿', '001'),
-  ('Sea Side 椿 -はなれ-', '002'),
-  ('河崎浪漫館', '003'),
-  ('Active Art Hotel', '004'),
-  ('癒しの空間 ZEN', '005'),
-  ('DATE DREAM DATE home', '006'),
-  ('Sei-Jima Retreat', '007'),
-  ('ORIGAMI', '008'),
-  ('奥阿賀七名庵 らくら', '009');
+  ('001.Sea Side 椿', '001'),
+  ('002.Sea Side 椿 -はなれ-', '002'),
+  ('003.河崎浪漫館', '003'),
+  ('004.Active Art Hotel', '004'),
+  ('005.癒しの空間 ZEN', '005'),
+  ('006.DATE DREAM DATE home', '006'),
+  ('007.Sei-Jima Retreat', '007'),
+  ('008.ORIGAMI', '008'),
+  ('009.奥阿賀七名庵 らくら', '009');

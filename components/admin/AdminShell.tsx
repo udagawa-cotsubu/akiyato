@@ -86,13 +86,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   <PlugIcon className="size-4" />
                   API接続チェック
                 </Link>
-                <Link
-                  href="/judge"
-                  onClick={closeMenu}
-                  className="cursor-pointer text-muted-foreground text-sm underline"
-                >
-                  判定フォームへ
-                </Link>
               </footer>
             </div>
           </aside>
@@ -130,12 +123,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             >
               <PlugIcon className="size-4" />
               API接続チェック
-            </Link>
-            <Link
-              href="/judge"
-              className="cursor-pointer text-muted-foreground text-sm underline"
-            >
-              判定フォームへ
             </Link>
           </footer>
         </div>
