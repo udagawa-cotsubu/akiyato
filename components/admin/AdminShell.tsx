@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboardIcon, MenuIcon, PlugIcon, XIcon } from "lucide-react";
+import { LayoutDashboardIcon, MenuIcon, PlugIcon, XIcon, HotelIcon, Building2Icon } from "lucide-react";
 
 const navItems = [
   { href: "/admin/judgements", label: "判定結果管理", icon: LayoutDashboardIcon },
-  { href: "/admin/api-check", label: "API接続チェック", icon: PlugIcon },
+  { href: "/admin/inns", label: "宿管理", icon: Building2Icon },
+  { href: "/admin/lodging/import", label: "予約インポート", icon: HotelIcon },
+  { href: "/admin/lodging/dashboard", label: "ダッシュボード", icon: LayoutDashboardIcon },
 ] as const;
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
@@ -65,7 +67,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     href={href}
                     onClick={closeMenu}
                     className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                      pathname === href ? "bg-muted" : "hover:bg-muted"
+                      pathname === href || (href !== "/admin" && pathname.startsWith(href)) ? "bg-muted" : "hover:bg-muted"
                     }`}
                   >
                     <Icon className="size-4" />
@@ -73,7 +75,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 ))}
               </nav>
-              <footer className="border-t pt-4">
+              <footer className="border-t pt-4 flex flex-col gap-2">
+                <Link
+                  href="/admin/api-check"
+                  onClick={closeMenu}
+                  className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    pathname === "/admin/api-check" ? "bg-muted" : "hover:bg-muted text-muted-foreground"
+                  }`}
+                >
+                  <PlugIcon className="size-4" />
+                  API接続チェック
+                </Link>
                 <Link
                   href="/judge"
                   onClick={closeMenu}
@@ -101,7 +113,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
-                  pathname === href ? "bg-muted" : ""
+                  pathname === href || (href !== "/admin" && pathname.startsWith(href)) ? "bg-muted" : ""
                 }`}
               >
                 <Icon className="size-4" />
@@ -109,7 +121,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
-          <footer className="border-t pt-4">
+          <footer className="border-t pt-4 flex flex-col gap-2">
+            <Link
+              href="/admin/api-check"
+              className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
+                pathname === "/admin/api-check" ? "bg-muted" : "text-muted-foreground"
+              }`}
+            >
+              <PlugIcon className="size-4" />
+              API接続チェック
+            </Link>
             <Link
               href="/judge"
               className="cursor-pointer text-muted-foreground text-sm underline"
