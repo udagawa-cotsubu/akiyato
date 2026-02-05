@@ -67,7 +67,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     href={href}
                     onClick={closeMenu}
                     className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
-                      pathname === href || (href !== "/admin" && pathname.startsWith(href)) ? "bg-muted" : "hover:bg-muted"
+                      pathname === href || pathname.startsWith(href) ? "bg-muted" : "hover:bg-muted"
                     }`}
                   >
                     <Icon className="size-4" />
@@ -113,7 +113,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
-                  pathname === href || (href !== "/admin" && pathname.startsWith(href)) ? "bg-muted" : ""
+                  pathname === href || pathname.startsWith(href) ? "bg-muted" : ""
                 }`}
               >
                 <Icon className="size-4" />
