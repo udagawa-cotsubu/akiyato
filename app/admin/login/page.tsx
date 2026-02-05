@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,7 +8,6 @@ import { useAdminAuth } from "@/lib/admin/useAdminAuth";
 import { toast } from "sonner";
 
 export default function AdminLoginPage() {
-  const router = useRouter();
   const { login } = useAdminAuth();
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,7 +22,9 @@ export default function AdminLoginPage() {
         return;
       }
       toast.success("ログインしました");
-      router.push("/admin/judgements");
+      // 完全遷移で AdminGate が localStorage を読んで認証済みと判定するようにする
+      window.location.href = "/admin/judgements";
+      return;
     } finally {
       setLoading(false);
     }
