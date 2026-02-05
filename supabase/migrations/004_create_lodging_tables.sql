@@ -38,12 +38,14 @@ create index if not exists idx_lodging_reservations_check_in
 alter table public.lodging_inns enable row level security;
 alter table public.lodging_reservations enable row level security;
 
+drop policy if exists "Allow anon all lodging_inns" on public.lodging_inns;
 create policy "Allow anon all lodging_inns"
   on public.lodging_inns for all
   to anon
   using (true)
   with check (true);
 
+drop policy if exists "Allow anon all lodging_reservations" on public.lodging_reservations;
 create policy "Allow anon all lodging_reservations"
   on public.lodging_reservations for all
   to anon

@@ -1,22 +1,49 @@
 /**
  * 宿泊ダッシュボード用リポジトリ層
  *
- * - NEXT_PUBLIC_LODGING_USE_SUPABASE=true のときは Supabase、未設定または false のときは IndexedDB を利用
+ * - 現在は常に Supabase を利用して宿／予約データを保存する
  */
 
 import { v4 as uuidv4 } from "uuid";
 
 import type { Inn, Reservation, ReservationFilter } from "@/lib/types/lodging";
 import { mapCsvToDomain, parseCsvText } from "./csvMapping";
-import * as localDb from "./localDb";
 import * as supabaseDb from "./supabaseDb";
 
-const useSupabase = process.env.NEXT_PUBLIC_LODGING_USE_SUPABASE === "true";
-const db = useSupabase ? supabaseDb : localDb;
+const db = supabaseDb;
 
 /** 宿を全件取得 */
 export async function fetchInns(): Promise<Inn[]> {
   return db.getAllInns();
+}
+
+/** 宿を新規追加 */
+export async function createInn(input: Omit<Inn, "id">): Promise<Inn> {
+  const code = input.tag?.trim() || null;
+  const inn: Inn = {
+    id: uuidv4(),
+    name: input.name,
+    tag: code,
+    displayName: code ? `${code}.${input.name}` : input.name,
+  };
+  await db.saveInns([inn]);
+  return inn;
+}
+
+/** 宿を更新 */
+export async function updateInn(inn: Inn): Promise<void> {
+  const code = inn.tag?.trim() || null;
+  const updated: Inn = {
+    ...inn,
+    tag: code,
+    displayName: code ? `${code}.${inn.name}` : inn.name,
+  };
+  await db.saveInns([updated]);
+}
+
+/** 宿を削除 */
+export async function deleteInn(id: string): Promise<void> {
+  await db.deleteInn(id);
 }
 
 /** 条件付きで予約一覧を取得 */
@@ -26,7 +53,6 @@ export async function fetchReservations(filter?: ReservationFilter): Promise<Res
 
 /** 宿・予約を一括保存（ID がないものには UUID を付与） */
 export async function upsertInnsAndReservations(params: {
-  inns: Omit<Inn, "id">[] | Inn[];
   reservations: Omit<Reservation, "id">[] | Reservation[];
 }): Promise<void> {
   const [existingInns, existingReservations] = await Promise.all([
@@ -34,30 +60,14 @@ export async function upsertInnsAndReservations(params: {
     db.getReservations(),
   ]);
 
-  // --- 宿（Inn）の正規化 ---
-  const innByName = new Map<string, Inn>();
+  // --- 宿（Inn）の解決 ---
+  // CSV 側の「csv連携用文字列」（= Reservation.innName）と Inn.displayName が完全一致する場合のみ紐付ける
+  const innByMatchKey = new Map<string, Inn>();
   existingInns.forEach((inn) => {
-    innByName.set(inn.name, inn);
-  });
-
-  const normalizedInns: Inn[] = [];
-
-  for (const innInput of params.inns) {
-    const base = innInput as Inn | Omit<Inn, "id">;
-    const existing = "id" in base ? base : innByName.get(base.name);
-    if (existing) {
-      normalizedInns.push(existing);
-      continue;
+    if (inn.displayName) {
+      innByMatchKey.set(inn.displayName, inn);
     }
-
-    const created: Inn = {
-      id: uuidv4(),
-      name: base.name,
-      tag: "tag" in base ? base.tag ?? null : null,
-    };
-    normalizedInns.push(created);
-    innByName.set(created.name, created);
-  }
+  });
 
   // --- 予約（Reservation）の正規化 ---
   // AirHost予約ID 単位で1レコードにしたいので、既存分をマップ化しておく
@@ -69,6 +79,8 @@ export async function upsertInnsAndReservations(params: {
   });
 
   const normalizedReservations: Reservation[] = [];
+  const unknownInnKeys = new Set<string>();
+
   for (const r of params.reservations) {
     const base = r as Reservation | Omit<Reservation, "id">;
     const airId = base.airhostReservationId;
@@ -86,25 +98,43 @@ export async function upsertInnsAndReservations(params: {
       id = "id" in base ? base.id : uuidv4();
     }
 
-    // 宿名から innId を補完（既に埋まっている場合は優先）
-    let innId = (base as Reservation).innId;
-    if (!innId && (base as Reservation).innName) {
-      const inn = innByName.get((base as Reservation).innName as string);
-      if (inn) {
-        innId = inn.id;
+    // CSV 上の「csv連携用文字列」（Reservation.innName）から、必ず既存の宿を解決する
+    const csvKey = (base as Reservation).innName?.trim() ?? "";
+    const matchedInn = csvKey ? innByMatchKey.get(csvKey) : undefined;
+    if (!matchedInn) {
+      if (csvKey) {
+        unknownInnKeys.add(csvKey);
       }
+      continue;
     }
 
-    normalizedReservations.push({ ...(base as Reservation), id, innId: innId ?? (base as Reservation).innId });
+    normalizedReservations.push({
+      ...(base as Reservation),
+      id,
+      innId: matchedInn.id,
+      // 表示用の innName は宿マスタの本来の名前で上書きしておく
+      innName: matchedInn.name,
+    });
   }
 
-  // 同一 id が複数回あると Supabase upsert が "cannot affect row a second time" で失敗するため、id で一意にしてから保存
-  const uniqueInns = Array.from(new Map(normalizedInns.map((i) => [i.id, i])).values());
+  if (unknownInnKeys.size > 0) {
+    const samples = Array.from(unknownInnKeys).slice(0, 5);
+    const more = unknownInnKeys.size > samples.length ? `（ほか ${unknownInnKeys.size - samples.length} 件）` : "";
+    throw new Error(
+      `CSV の「宿連携用文字列」に対応する宿が見つからない行があります。\n` +
+        `宿管理画面で以下の文字列を「csv連携用文字列」として登録してから、再度インポートしてください。\n` +
+        `未登録の文字列: ${samples.join(", ")}${more}`,
+    );
+  }
 
-  await db.saveInns(uniqueInns);
   if (normalizedReservations.length > 0) {
     await db.saveReservations(normalizedReservations);
   }
+}
+
+/** 予約のみ削除（宿は残す） */
+export async function resetReservationsOnly(): Promise<void> {
+  await db.clearReservationsOnly();
 }
 
 /** すべての宿・予約を削除 */
@@ -114,19 +144,17 @@ export async function resetLodgingData(): Promise<void> {
 
 /** ブラウザで読み込んだ CSV テキスト群をドメインオブジェクトとして保存する */
 export async function importCsvTexts(csvTexts: string[]): Promise<void> {
-  const inns: Omit<Inn, "id">[] = [];
   const reservations: Omit<Reservation, "id">[] = [];
 
   for (const text of csvTexts) {
     const rows = parseCsvText(text);
     const mapped = mapCsvToDomain(rows);
-    inns.push(...mapped.inns);
     reservations.push(...mapped.reservations);
   }
 
-  if (inns.length === 0 || reservations.length === 0) return;
+  if (reservations.length === 0) return;
 
-  await upsertInnsAndReservations({ inns, reservations });
+  await upsertInnsAndReservations({ reservations });
 }
 
 

@@ -33,7 +33,12 @@ export default function LodgingSalesPage() {
   }, [reservations]);
 
   const sortedInns = useMemo(
-    () => [...inns].sort((a, b) => a.name.localeCompare(b.name, "ja")),
+    () =>
+      [...inns].sort((a, b) => {
+        const keyA = a.displayName ?? (a.tag ? `${a.tag}.${a.name}` : a.name);
+        const keyB = b.displayName ?? (b.tag ? `${b.tag}.${b.name}` : b.name);
+        return keyA.localeCompare(keyB, "ja");
+      }),
     [inns],
   );
 

@@ -20,16 +20,19 @@ create index if not exists idx_judgements_created_at
 -- 匿名（未ログイン）でも insert / select / delete を許可する（本番では RLS で制限を推奨）
 alter table public.judgements enable row level security;
 
+drop policy if exists "Allow anon insert" on public.judgements;
 create policy "Allow anon insert"
   on public.judgements for insert
   to anon
   with check (true);
 
+drop policy if exists "Allow anon select" on public.judgements;
 create policy "Allow anon select"
   on public.judgements for select
   to anon
   using (true);
 
+drop policy if exists "Allow anon delete" on public.judgements;
 create policy "Allow anon delete"
   on public.judgements for delete
   to anon

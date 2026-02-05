@@ -42,6 +42,22 @@ Open [http://localhost:3000](http://localhost:3000) with your browser. トップ
 - キーに余分なスペースやクォートを付けないでください。
 - `.env.local` を変更したら、**開発サーバーを再起動**してください。
 
+### DB マイグレーション（Supabase）
+
+マイグレーションはソースの `supabase/migrations/` で管理し、コマンドで反映できます。
+
+**初回のみ（プロジェクトのリンク）**
+
+1. [Supabase CLI](https://supabase.com/docs/guides/cli) を入れている前提で、未ログインなら `npx supabase login` を実行する。
+2. リポジトリを Supabase のプロジェクトと紐づける。  
+   Project ref はダッシュボードの URL（`https://app.supabase.com/project/<project-ref>`）の `<project-ref>` か、`.env.local` の `NEXT_PUBLIC_SUPABASE_URL` のホスト名の先頭（例: `https://xxxx.supabase.co` なら `xxxx`）です。
+   ```bash
+   npx supabase link --project-ref <あなたの project ref>
+   ```
+3. 以降は次のコマンドで運用できる。
+   - **マイグレーションをリモートに反映**: `npm run db:push`
+   - **リモート DB を初期化して全マイグレーション＋シードをやり直す**: `npm run db:reset`（データはすべて消えます）
+
 ### API 接続チェック
 
 管理画面の **API接続チェック**（[/admin/api-check](http://localhost:3000/admin/api-check)）で、OpenAI・Supabase・Serper の接続可否を確認できます。接続失敗時は表示メッセージに従って `.env.local` やテーブル作成を確認してください。

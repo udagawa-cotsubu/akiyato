@@ -57,13 +57,16 @@ function WeeklySalesTooltip({ active, payload, label }: CustomTooltipProps) {
   );
 }
 
-/** 週キーの週開始日が今日以降なら true（未来の週＝オレンジ表示） */
+/** 週キーの週開始日が今日以降なら true（未来の週＝オレンジ表示）。dateToWeekKey と同じ週開始日計算 */
 function isFutureWeek(weekKey: string): boolean {
   const match = /^([0-9]{4})\s+([0-9]+)W$/.exec(weekKey);
   if (!match) return false;
   const year = Number(match[1]);
   const week = Number(match[2]);
-  const weekStart = new Date(year, 0, 1 + (week - 1) * 7);
+  const jan1 = new Date(year, 0, 1);
+  jan1.setHours(0, 0, 0, 0);
+  const weekStart = new Date(jan1);
+  weekStart.setDate(jan1.getDate() + (week - 1) * 7);
   weekStart.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -121,13 +124,17 @@ export function WeeklySalesChart({ data, weeks }: WeeklySalesChartProps) {
         fill={stroke}
         radius={[2, 2, 0, 0]}
       >
-        {chartData.map((entry, i) => (
-          <Cell
-            key={i}
-            fill={isFutureWeek(entry.weekKey as string) ? FUTURE_BAR_COLOR : stroke}
-            stroke={isFutureWeek(entry.weekKey as string) ? FUTURE_BAR_COLOR : stroke}
-          />
-        ))}
+        {chartData.map((entry, i) => {
+          const isFuture = isFutureWeek(entry.weekKey as string);
+          return (
+            <Cell
+              key={i}
+              fill={isFuture ? FUTURE_BAR_COLOR : stroke}
+              stroke={isFuture ? FUTURE_BAR_COLOR : stroke}
+              fillOpacity={1}
+            />
+          );
+        })}
       </Bar>
     );
   });

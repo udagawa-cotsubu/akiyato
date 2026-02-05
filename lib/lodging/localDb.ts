@@ -117,6 +117,18 @@ export async function saveInns(inns: Inn[]): Promise<void> {
   });
 }
 
+/** 単一の宿を削除 */
+export async function deleteInn(id: string): Promise<void> {
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_INNS, "readwrite");
+    const store = tx.objectStore(STORE_INNS);
+    store.delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("Failed to delete inn"));
+  });
+}
+
 /** 予約をまとめて保存（同じ ID は上書き） */
 export async function saveReservations(reservations: Reservation[]): Promise<void> {
   const db = await openDatabase();
@@ -164,6 +176,18 @@ export async function getReservations(filter?: ReservationFilter): Promise<Reser
     }
 
     return true;
+  });
+}
+
+/** 予約のみ削除（宿は残す） */
+export async function clearReservationsOnly(): Promise<void> {
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_RESERVATIONS, "readwrite");
+    const store = tx.objectStore(STORE_RESERVATIONS);
+    store.clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("Failed to clear reservations"));
   });
 }
 

@@ -21,20 +21,19 @@ const YEAR_COLORS: Record<string, string> = {
   "2026": "#f97316",
 };
 
-/** その年のその週の開始日が今日以降なら true（未来＝透明度上げる） */
+/** その年のその週の開始日が今日以降なら true（未来＝色を薄く）。dateToWeekKey と同じ週開始日計算 */
 function isFutureWeekForYear(year: number, week: number): boolean {
-  const weekStart = new Date(year, 0, 1 + (week - 1) * 7);
+  const jan1 = new Date(year, 0, 1);
+  jan1.setHours(0, 0, 0, 0);
+  const weekStart = new Date(jan1);
+  weekStart.setDate(jan1.getDate() + (week - 1) * 7);
   weekStart.setHours(0, 0, 0, 0);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return weekStart.getTime() >= today.getTime();
 }
 
-/** 16進色に透明度（約40%）を付与 */
-function withOpacity(hex: string, alpha = 0.4): string {
-  const a = Math.round(alpha * 255).toString(16).padStart(2, "0");
-  return `${hex}${a}`;
-}
+const FUTURE_OPACITY = 0.4;
 
 /** ツールチップ用: ◯W の横に今年のその週の日付範囲を表示（例: 1W 2026年1/1~1/7） */
 function formatWeekLabelWithDateRange(weekLabel: string): string {
@@ -147,13 +146,13 @@ export function WeeklyOccupancyYearCompareChart({
                 {data.map((entry, i) => {
                   const weekNum = i + 1;
                   const isFuture = isFutureWeekForYear(Number(year), weekNum);
-                  const fillColor = isFuture ? withOpacity(color) : color;
-                  const strokeColor = isFuture ? withOpacity(color) : color;
                   return (
                     <Cell
                       key={i}
-                      fill={fillColor}
-                      stroke={strokeColor}
+                      fill={color}
+                      stroke={color}
+                      fillOpacity={isFuture ? FUTURE_OPACITY : 1}
+                      strokeOpacity={isFuture ? FUTURE_OPACITY : 1}
                     />
                   );
                 })}

@@ -13,6 +13,7 @@ comment on column public.judgements.outcome_note is '結果の自由メモ';
 comment on column public.judgements.outcome_at is '結果を記録した日時';
 
 -- 結果（アウトカム）の更新を許可
+drop policy if exists "Allow anon update" on public.judgements;
 create policy "Allow anon update"
   on public.judgements for update
   to anon

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { importCsvTexts, fetchInns, fetchReservations, resetLodgingData } from "@/lib/lodging/repository";
+import { importCsvTexts, fetchInns, fetchReservations, resetReservationsOnly } from "@/lib/lodging/repository";
 import type { Inn, Reservation, ReservationFilter } from "@/lib/types/lodging";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +62,12 @@ export default function LodgingImportPage() {
   );
 
   const sortedInns = useMemo(
-    () => [...inns].sort((a, b) => a.name.localeCompare(b.name, "ja")),
+    () =>
+      [...inns].sort((a, b) => {
+        const keyA = a.displayName ?? (a.tag ? `${a.tag}.${a.name}` : a.name);
+        const keyB = b.displayName ?? (b.tag ? `${b.tag}.${b.name}` : b.name);
+        return keyA.localeCompare(keyB, "ja");
+      }),
     [inns],
   );
 
@@ -87,7 +92,8 @@ export default function LodgingImportPage() {
       setReservations(reservationList);
       toast.success(`${texts.length} 件の CSV を取り込みました`);
     } catch (e) {
-      toast.error("CSV の取り込みに失敗しました");
+      const message = e instanceof Error ? e.message : "CSV の取り込みに失敗しました";
+      toast.error(message);
       console.error(e);
     } finally {
       setUploading(false);
@@ -223,14 +229,15 @@ export default function LodgingImportPage() {
           <Button
             variant="destructive"
             onClick={async () => {
-              if (!window.confirm("宿・予約データをすべて削除します。よろしいですか？")) return;
-              await resetLodgingData();
-              setInns([]);
+              if (!window.confirm("予約データのみ削除します。宿データは残ります。よろしいですか？")) return;
+              await resetReservationsOnly();
               setReservations([]);
-              toast.success("宿泊データをすべて削除しました");
+              const innList = await fetchInns();
+              setInns(innList);
+              toast.success("予約データを削除しました（宿は残しています）");
             }}
           >
-            全データ削除
+            予約データを削除
           </Button>
         </div>
       </div>

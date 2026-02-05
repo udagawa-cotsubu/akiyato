@@ -146,25 +146,6 @@ export function buildStayNights(reservations: Reservation[], filter?: Reservatio
   const innId = filter?.innId;
   const source = filter?.source;
 
-  // #region agent log
-  fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "debug-session",
-      runId: "dashboard-debug",
-      hypothesisId: "H1",
-      location: "lib/lodging/metrics.ts:buildStayNights",
-      message: "buildStayNights called",
-      data: {
-        reservationsCount: reservations.length,
-        filter,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
-
   for (const r of reservations) {
     // キャンセル・ブロックは稼働率計算から除外
     if (r.status === "キャンセル" || r.status === "ブロック") continue;
@@ -184,7 +165,11 @@ export function buildStayNights(reservations: Reservation[], filter?: Reservatio
     for (let i = 0; i < r.nights; i += 1) {
       const d = new Date(baseDate);
       d.setDate(d.getDate() + i);
-      const date = d.toISOString().slice(0, 10); // YYYY-MM-DD
+      // ローカル日付で YYYY-MM-DD（toISOString は UTC のためタイムゾーンで日付がずれるのを防ぐ）
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const date = `${y}-${m}-${day}`;
 
       result.push({
         id: uuidv4(),
@@ -201,17 +186,27 @@ export function buildStayNights(reservations: Reservation[], filter?: Reservatio
   return result;
 }
 
-/** 日付文字列から {year, week, key} を算出する（簡易実装: 1/1 から7日ごと） */
+/** 日付文字列（YYYY-MM-DD）から {year, week, key} を算出する（簡易実装: 1/1 から7日ごと）。ローカル日付として解釈 */
 export function dateToWeekKey(dateStr: string): { year: number; week: number; key: string } {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) {
-    return { year: 0, week: 0, key: "invalid" };
+  const parts = dateStr.trim().split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return { year: 0, week: 0, key: "invalid" };
+    const year = d.getFullYear();
+    const jan1 = new Date(year, 0, 1);
+    const diffMs = d.getTime() - jan1.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const week = Math.min(53, Math.max(1, Math.floor(diffDays / 7) + 1));
+    return { year, week, key: `${year} ${week}W` };
   }
+  const [y, m, day] = parts;
+  const d = new Date(y, m - 1, day);
+  if (Number.isNaN(d.getTime())) return { year: 0, week: 0, key: "invalid" };
   const year = d.getFullYear();
   const jan1 = new Date(year, 0, 1);
   const diffMs = d.getTime() - jan1.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const week = Math.floor(diffDays / 7) + 1;
+  const week = Math.min(53, Math.max(1, Math.floor(diffDays / 7) + 1));
   const key = `${year} ${week}W`;
   return { year, week, key };
 }

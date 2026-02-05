@@ -10,9 +10,15 @@
 export interface Inn {
   /** 内部用 ID（ブラウザ側で生成する UUID など） */
   id: string;
-  /** CSV の「物件名」 */
+  /** 宿の本来の名前 */
   name: string;
-  /** CSV の「物件タグ」 */
+  /**
+   * CSV連携用文字列（例: 001.Sea Side 椿）
+   *
+   * 宿コード(tag) + "." + 宿名(name) から自動生成される派生値として扱う。
+   */
+  displayName?: string | null;
+  /** 宿コード（例: 001） */
   tag?: string | null;
 }
 
