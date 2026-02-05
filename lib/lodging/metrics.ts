@@ -234,6 +234,10 @@ export interface WeeklyOccupancyPoint {
   innName: string | null;
   stayedNights: number;
   occupancy: number;
+  /** 並び替え用（内部） */
+  year: number;
+  /** 並び替え用（内部） */
+  week: number;
 }
 
 /** StayNight 配列から宿×週の稼働率を計算する */
@@ -253,10 +257,7 @@ export function buildWeeklyOccupancy(stayNights: StayNight[]): WeeklyOccupancyPo
         innName: sn.innName,
         stayedNights: 1,
         occupancy: 0,
-        // year/week は並び替え用に内部的に保持（型には含めない）
-        // @ts-expect-error internal
         year,
-        // @ts-expect-error internal
         week,
       });
     } else {
@@ -270,35 +271,9 @@ export function buildWeeklyOccupancy(stayNights: StayNight[]): WeeklyOccupancyPo
   }
 
   const result = Array.from(map.values()).sort((a, b) => {
-    // @ts-expect-error internal
     if (a.year !== b.year) return a.year - b.year;
-    // @ts-expect-error internal
     return a.week - b.week;
   });
-
-  // #region agent log
-  fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "debug-session",
-      runId: "dashboard-debug",
-      hypothesisId: "H2",
-      location: "lib/lodging/metrics.ts:buildWeeklyOccupancy",
-      message: "weekly occupancy computed",
-      data: {
-        stayNightsCount: stayNights.length,
-        points: result.map((p) => ({
-          weekKey: p.weekKey,
-          innId: p.innId,
-          stayedNights: p.stayedNights,
-          occupancy: p.occupancy,
-        })),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
 
   return result;
 }
