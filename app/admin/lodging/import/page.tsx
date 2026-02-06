@@ -1,17 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { importCsvTexts, fetchInns, fetchReservations, resetReservationsOnly } from "@/lib/lodging/repository";
-import type { Inn, Reservation, ReservationFilter } from "@/lib/types/lodging";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { importCsvTexts, fetchInns, fetchReservations } from "@/lib/lodging/repository";
+import type { Inn, Reservation } from "@/lib/types/lodging";
 import {
   Table,
   TableBody,
@@ -22,56 +13,33 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { postReservationImportNotification } from "@/lib/integration/slackReservations";
+
+type ImportSourceType = "checkin" | "reservation" | "cancel";
 
 export default function LodgingImportPage() {
-  const [dragActive, setDragActive] = useState(false);
+  const [dragActive, setDragActive] = useState<Record<ImportSourceType, boolean>>({
+    checkin: false,
+    reservation: false,
+    cancel: false,
+  });
   const [uploading, setUploading] = useState(false);
   const [inns, setInns] = useState<Inn[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [filter, setFilter] = useState<ReservationFilter>({});
+  const [page, setPage] = useState(1);
+
+  const pageSize = 20;
 
   useEffect(() => {
     void (async () => {
       const [innList, reservationList] = await Promise.all([fetchInns(), fetchReservations()]);
       setInns(innList);
       setReservations(reservationList);
+      setPage(1);
     })();
   }, []);
 
-  const filteredReservations = useMemo(() => {
-    if (!reservations.length) return [];
-    const { innId, source, searchText } = filter;
-    const q = searchText?.trim().toLowerCase();
-
-    return reservations.filter((r) => {
-      if (innId && r.innId !== innId) return false;
-      if (source && r.source && r.source !== source) return false;
-
-      if (q) {
-        const haystack = `${r.source ?? ""} ${r.status ?? ""} ${r.ratePlan ?? ""}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [reservations, filter]);
-
-  const uniqueSources = useMemo(
-    () =>
-      Array.from(new Set(reservations.map((r) => r.source).filter((v): v is string => !!v))).sort(),
-    [reservations],
-  );
-
-  const sortedInns = useMemo(
-    () =>
-      [...inns].sort((a, b) => {
-        const keyA = a.displayName ?? (a.tag ? `${a.tag}.${a.name}` : a.name);
-        const keyB = b.displayName ?? (b.tag ? `${b.tag}.${b.name}` : b.name);
-        return keyA.localeCompare(keyB, "ja");
-      }),
-    [inns],
-  );
-
-  const handleFiles = async (files: FileList | null) => {
+  const handleFiles = async (sourceType: ImportSourceType, files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
@@ -86,39 +54,78 @@ export default function LodgingImportPage() {
         return;
       }
 
-      await importCsvTexts(texts);
+      const { reservationsCount, reservationsSummary } = await importCsvTexts(texts);
       const [innList, reservationList] = await Promise.all([fetchInns(), fetchReservations()]);
       setInns(innList);
       setReservations(reservationList);
       toast.success(`${texts.length} 件の CSV を取り込みました`);
+
+      if (sourceType === "reservation" || sourceType === "cancel") {
+        void postReservationImportNotification({
+          importSourceType: sourceType,
+          totalCount: reservationsCount,
+          reservations: reservationsSummary,
+        });
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "CSV の取り込みに失敗しました";
       toast.error(message);
       console.error(e);
     } finally {
       setUploading(false);
-      setDragActive(false);
+      setDragActive((prev) => ({
+        ...prev,
+        [sourceType]: false,
+      }));
     }
   };
 
-  const onDrop: React.DragEventHandler<HTMLDivElement> = async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setDragActive(false);
-    await handleFiles(event.dataTransfer.files);
+  const createDropHandlers = (sourceType: ImportSourceType) => {
+    const onDrop: React.DragEventHandler<HTMLDivElement> = async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDragActive((prev) => ({ ...prev, [sourceType]: false }));
+      await handleFiles(sourceType, event.dataTransfer.files);
+    };
+
+    const onDragOver: React.DragEventHandler<HTMLDivElement> = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDragActive((prev) => {
+        if (prev[sourceType]) return prev;
+        return { ...prev, [sourceType]: true };
+      });
+    };
+
+    const onDragLeave: React.DragEventHandler<HTMLDivElement> = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setDragActive((prev) => ({ ...prev, [sourceType]: false }));
+    };
+
+    return { onDrop, onDragOver, onDragLeave };
   };
 
-  const onDragOver: React.DragEventHandler<HTMLDivElement> = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!dragActive) setDragActive(true);
-  };
+  const checkinHandlers = createDropHandlers("checkin");
+  const reservationHandlers = createDropHandlers("reservation");
+  const cancelHandlers = createDropHandlers("cancel");
 
-  const onDragLeave: React.DragEventHandler<HTMLDivElement> = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setDragActive(false);
-  };
+  const sortedReservations = useMemo(() => {
+    return [...reservations].sort((a, b) => {
+      const aDate = a.bookingDate ?? "";
+      const bDate = b.bookingDate ?? "";
+      if (!aDate && !bDate) return 0;
+      if (!aDate) return 1;
+      if (!bDate) return -1;
+      // 予約日が新しいものが上（降順）
+      return bDate.localeCompare(aDate);
+    });
+  }, [reservations]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedReservations.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const pagedReservations = sortedReservations.slice(startIndex, startIndex + pageSize);
 
   return (
     <div className="space-y-6">
@@ -130,173 +137,188 @@ export default function LodgingImportPage() {
       </div>
 
       {/* アップロード UI */}
-      <div className="space-y-3">
-        <div
-          className={`flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-            dragActive ? "border-primary bg-muted/40" : "border-muted-foreground/30 bg-muted/20"
-          }`}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
-        >
-          <p className="font-medium">CSV ファイルをここにドラッグ＆ドロップ</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            または、下のボタンからファイルを選択（複数ファイル対応）
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* チェックイン日エリア */}
+        <div className="flex h-full flex-col space-y-2">
+          <h3 className="text-sm font-semibold">チェックイン日ベースの予約インポート</h3>
+          <p className="text-xs text-muted-foreground">
+            チェックイン日を基準にしたレポートなどに使う想定のデータです。Slack通知は行われません。
           </p>
-          <div className="mt-4">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-background px-3 py-2 text-sm font-medium shadow-sm ring-1 ring-border hover:bg-muted">
-              <span>ファイルを選択</span>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                multiple
-                className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-            </label>
+          <div
+            className={`mt-2 flex min-h-[160px] flex-1 flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
+              dragActive.checkin ? "border-primary bg-muted/40" : "border-muted-foreground/30 bg-muted/20"
+            }`}
+            onDrop={checkinHandlers.onDrop}
+            onDragOver={checkinHandlers.onDragOver}
+            onDragLeave={checkinHandlers.onDragLeave}
+          >
+            <p className="font-medium text-sm">CSV をドラッグ＆ドロップ</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">または、ボタンからファイルを選択</p>
+            <div className="mt-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-background px-3 py-1.5 text-xs font-medium shadow-sm ring-1 ring-border hover:bg-muted">
+                <span>ファイルを選択</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles("checkin", e.target.files)}
+                />
+              </label>
+            </div>
           </div>
-          {uploading && (
-            <p className="mt-2 text-xs text-muted-foreground">取り込み中です…</p>
-          )}
+        </div>
+
+        {/* 予約日エリア */}
+        <div className="flex h-full flex-col space-y-2">
+          <h3 className="text-sm font-semibold">予約日ベースの予約インポート（Slack通知あり）</h3>
+          <p className="text-xs text-muted-foreground">
+            予約日を基準にした実績把握向けのデータです。このエリアからインポートすると、Slackにサマリが通知されます。
+          </p>
+          <div
+            className={`mt-2 flex min-h-[160px] flex-1 flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
+              dragActive.reservation ? "border-primary bg-muted/40" : "border-muted-foreground/30 bg-muted/20"
+            }`}
+            onDrop={reservationHandlers.onDrop}
+            onDragOver={reservationHandlers.onDragOver}
+            onDragLeave={reservationHandlers.onDragLeave}
+          >
+            <p className="font-medium text-sm">CSV をドラッグ＆ドロップ</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">または、ボタンからファイルを選択</p>
+            <div className="mt-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-background px-3 py-1.5 text-xs font-medium shadow-sm ring-1 ring-border hover:bg-muted">
+                <span>ファイルを選択</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles("reservation", e.target.files)}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* キャンセル日エリア */}
+        <div className="flex h-full flex-col space-y-2">
+          <h3 className="text-sm font-semibold">キャンセル日ベースの予約インポート（Slack通知あり）</h3>
+          <p className="text-xs text-muted-foreground">
+            キャンセル日を基準にした状況把握向けのデータです。このエリアからインポートすると、Slackにサマリが通知されます。
+          </p>
+          <div
+            className={`mt-2 flex min-h-[160px] flex-1 flex-col items-center justify-center rounded-lg border-2 border-dashed p-4 text-center transition-colors ${
+              dragActive.cancel ? "border-primary bg-muted/40" : "border-muted-foreground/30 bg-muted/20"
+            }`}
+            onDrop={cancelHandlers.onDrop}
+            onDragOver={cancelHandlers.onDragOver}
+            onDragLeave={cancelHandlers.onDragLeave}
+          >
+            <p className="font-medium text-sm">CSV をドラッグ＆ドロップ</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">または、ボタンからファイルを選択</p>
+            <div className="mt-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-background px-3 py-1.5 text-xs font-medium shadow-sm ring-1 ring-border hover:bg-muted">
+                <span>ファイルを選択</span>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles("cancel", e.target.files)}
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* フィルタ */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-end">
-        <div className="flex-1 space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">キーワード検索</label>
-          <Input
-            placeholder="予約サイト・プラン名で検索"
-            value={filter.searchText ?? ""}
-            onChange={(e) => setFilter((prev) => ({ ...prev, searchText: e.target.value }))}
-          />
-        </div>
-        <div className="flex-1 space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">宿</label>
-          <Select
-            value={filter.innId ?? "ALL"}
-            onValueChange={(value) =>
-              setFilter((prev) => ({
-                ...prev,
-                innId: value === "ALL" ? undefined : value,
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="すべての宿" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">すべて</SelectItem>
-              {sortedInns.map((inn) => (
-                <SelectItem key={inn.id} value={inn.id}>
-                  {inn.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex-1 space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">予約サイト</label>
-          <Select
-            value={filter.source ?? "ALL"}
-            onValueChange={(value) =>
-              setFilter((prev) => ({
-                ...prev,
-                source: value === "ALL" ? undefined : value,
-              }))
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="すべてのサイト" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">すべて</SelectItem>
-              {uniqueSources.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-center gap-2 mt-2 md:mt-0">
-          <Button
-            variant="outline"
-            onClick={() => setFilter({})}
-          >
-            条件クリア
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={async () => {
-              if (!window.confirm("予約データのみ削除します。宿データは残ります。よろしいですか？")) return;
-              await resetReservationsOnly();
-              setReservations([]);
-              const innList = await fetchInns();
-              setInns(innList);
-              toast.success("予約データを削除しました（宿は残しています）");
-            }}
-          >
-            予約データを削除
-          </Button>
-        </div>
-      </div>
+      {uploading && (
+        <p className="text-xs text-muted-foreground">CSV を取り込み中です…</p>
+      )}
 
       {/* 一覧 */}
-      {filteredReservations.length === 0 ? (
+      {sortedReservations.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            {reservations.length === 0
-              ? "まだ宿泊データが取り込まれていません。上のエリアから CSV をアップロードしてください。"
-              : "検索・フィルタ条件に一致する予約がありません。"}
+            まだ宿泊データが取り込まれていません。上のエリアから CSV をアップロードしてください。
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>宿</TableHead>
-                <TableHead>予約日</TableHead>
-                <TableHead>チェックイン</TableHead>
-                <TableHead>チェックアウト</TableHead>
-                <TableHead>泊数</TableHead>
-                <TableHead>人数（大人/子供/幼児）</TableHead>
-                <TableHead>予約サイト</TableHead>
-                <TableHead>状態</TableHead>
-                <TableHead>販売金額</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredReservations.map((r, index) => {
-                const inn = inns.find((i) => i.id === r.innId);
-                const innLabel = inn?.name ?? r.innName ?? "-";
-                return (
-                  <TableRow key={`${r.checkIn ?? ""}-${index}`}>
-                    <TableCell className="font-medium">
-                      {innLabel}
-                    </TableCell>
-                    <TableCell>{r.bookingDate ?? "-"}</TableCell>
-                    <TableCell>{r.checkIn ?? "-"}</TableCell>
-                    <TableCell>{r.checkOut ?? "-"}</TableCell>
-                    <TableCell>{r.nights ?? "-"}</TableCell>
-                    <TableCell>
-                      {r.status === "ブロック"
-                        ? "-"
-                        : `${r.adults ?? 0} / ${r.children ?? 0} / ${r.infants ?? 0}`}
-                    </TableCell>
-                    <TableCell>{r.source ?? "-"}</TableCell>
-                    <TableCell>
-                      {r.status ?? "-"}
-                    </TableCell>
-                    <TableCell>
-                      {r.saleAmount != null ? r.saleAmount.toLocaleString("ja-JP") : "-"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div>
+              全 {sortedReservations.length} 件中{" "}
+              {startIndex + 1}–{Math.min(startIndex + pageSize, sortedReservations.length)} 件を表示
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+              >
+                前の20件
+              </button>
+              <span>
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                className="rounded border px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                次の20件
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>宿</TableHead>
+                  <TableHead>予約日</TableHead>
+                  <TableHead>チェックイン</TableHead>
+                  <TableHead>チェックアウト</TableHead>
+                  <TableHead>泊数</TableHead>
+                  <TableHead>人数（大人/子供/幼児）</TableHead>
+                  <TableHead>予約サイト</TableHead>
+                  <TableHead>状態</TableHead>
+                  <TableHead>販売金額</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pagedReservations.map((r, index) => {
+                  const inn = inns.find((i) => i.id === r.innId);
+                  const innLabel = inn?.name ?? r.innName ?? "-";
+                  return (
+                    <TableRow key={`${r.checkIn ?? ""}-${startIndex + index}`}>
+                      <TableCell className="font-medium">
+                        {innLabel}
+                      </TableCell>
+                      <TableCell>{r.bookingDate ?? "-"}</TableCell>
+                      <TableCell>{r.checkIn ?? "-"}</TableCell>
+                      <TableCell>{r.checkOut ?? "-"}</TableCell>
+                      <TableCell>{r.nights ?? "-"}</TableCell>
+                      <TableCell>
+                        {r.status === "ブロック"
+                          ? "-"
+                          : `${r.adults ?? 0} / ${r.children ?? 0} / ${r.infants ?? 0}`}
+                      </TableCell>
+                      <TableCell>{r.source ?? "-"}</TableCell>
+                      <TableCell>
+                        {r.status ?? "-"}
+                      </TableCell>
+                      <TableCell>
+                        {r.saleAmount != null ? r.saleAmount.toLocaleString("ja-JP") : "-"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       )}
     </div>
