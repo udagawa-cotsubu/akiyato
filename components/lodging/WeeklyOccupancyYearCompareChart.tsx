@@ -55,7 +55,7 @@ export interface YearCompareRow {
   "2026": number;
 }
 
-/** 1宿分の週次稼働率から年比較用の行データを生成（1W〜53W、2024/2025/2026を横並び） */
+/** 1宿分の週次宿泊日数から年比較用の行データを生成（1W〜53W、2024/2025/2026を横並び） */
 export function buildOccupancyYearCompareData(
   innData: WeeklyOccupancyPoint[]
 ): YearCompareRow[] {
@@ -64,7 +64,7 @@ export function buildOccupancyYearCompareData(
     const match = /^([0-9]{4})\s+([0-9]+)W$/.exec(p.weekKey);
     if (!match) return;
     const [, year, week] = match;
-    map.set(`${year}_${week}`, Math.round(p.occupancy * 100));
+    map.set(`${year}_${week}`, p.stayedNights);
   });
   const rows: YearCompareRow[] = [];
   for (let w = 1; w <= 53; w += 1) {
@@ -99,7 +99,7 @@ function YearCompareTooltip({ active, payload, label }: CustomTooltipProps) {
       <div className="mt-1 space-y-0.5">
         {payload.map((p) => (
           <div key={p.dataKey} style={{ color: p.color }}>
-            {p.dataKey}年: {p.value}%
+            {p.dataKey}年: {p.value}泊
           </div>
         ))}
       </div>
@@ -129,7 +129,7 @@ export function WeeklyOccupancyYearCompareChart({
             height={28}
             tick={{ fontSize: 10 }}
           />
-          <YAxis tickFormatter={(v) => `${v}%`} domain={[0, 100]} width={28} tick={{ fontSize: 10 }} />
+          <YAxis tickFormatter={(v) => String(v)} domain={[0, 7]} ticks={[0, 1, 2, 3, 4, 5, 6, 7]} width={28} tick={{ fontSize: 10 }} />
           <Tooltip content={<YearCompareTooltip />} />
           <Legend />
           {YEARS.map((year) => {

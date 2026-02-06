@@ -30,8 +30,7 @@ function WeeklyOccupancyTooltip({ active, payload, label }: CustomTooltipProps) 
   const p = payload[0];
   const innId = p.dataKey as string;
   const innName = (p.payload?.[`${innId}_label`] as string | undefined) ?? "宿";
-  const percent = p.value as number;
-  const stayedNights = p.payload?.[`${innId}_stayedNights`] as number | undefined;
+  const stayedNights = (p.value as number) ?? (p.payload?.[`${innId}_stayedNights`] as number | undefined);
   const range = p.payload?.weekRange as string | undefined;
 
   return (
@@ -42,7 +41,7 @@ function WeeklyOccupancyTooltip({ active, payload, label }: CustomTooltipProps) 
         {range ? ` (${range})` : ""}
       </div>
       <div className="mt-1">
-        {percent}%{stayedNights != null ? ` / ${stayedNights}泊` : ""}
+        {stayedNights != null ? `${stayedNights}泊` : "0泊"}
       </div>
     </div>
   );
@@ -94,12 +93,12 @@ export function WeeklyOccupancyChart({ data, weeks }: WeeklyOccupancyChartProps)
     for (const innId of innIds) {
       const point = data.find((d) => d.weekKey === weekKey && d.innId === innId);
       if (point) {
-        // パーセンテージ表記にしたいので 0〜100 に変換
-        row[innId] = Math.round(point.occupancy * 100);
+        // Y軸は宿泊日数（0〜7）
+        row[innId] = point.stayedNights;
         row[`${innId}_label`] = point.innName ?? "宿";
         row[`${innId}_stayedNights`] = point.stayedNights;
       } else {
-        // その週に宿泊がない宿も 0% として明示的に保持する
+        // その週に宿泊がない宿も 0 として明示的に保持する
         row[innId] = 0;
         row[`${innId}_label`] = innNameById.get(innId) ?? "宿";
         row[`${innId}_stayedNights`] = 0;
@@ -142,8 +141,9 @@ export function WeeklyOccupancyChart({ data, weeks }: WeeklyOccupancyChartProps)
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="weekKey" />
         <YAxis
-          tickFormatter={(v) => `${v}%`}
-          domain={[0, 100]}
+          tickFormatter={(v) => String(v)}
+          domain={[0, 7]}
+          ticks={[0, 1, 2, 3, 4, 5, 6, 7]}
         />
         <Tooltip content={<WeeklyOccupancyTooltip />} />
         <Legend />

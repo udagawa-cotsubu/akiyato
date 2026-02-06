@@ -211,6 +211,24 @@ export function dateToWeekKey(dateStr: string): { year: number; week: number; ke
   return { year, week, key };
 }
 
+/**
+ * 週キー（例: "2024 1W"）を日付範囲文字列に変換する（例: "2024/01/01~2024/01/07"）
+ * dateToWeekKey と同じ週の定義（1/1から7日ごと）。53週目は年末でクリップする
+ */
+export function weekKeyToDateRange(weekKey: string): string {
+  const match = /^([0-9]{4})\s+([0-9]+)W$/.exec(weekKey.trim());
+  if (!match) return weekKey;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const start = new Date(year, 0, 1 + (week - 1) * 7);
+  const end = new Date(year, 0, 1 + (week - 1) * 7 + 6);
+  const lastDay = new Date(year, 11, 31);
+  const endClamped = end.getTime() > lastDay.getTime() ? lastDay : end;
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  return `${fmt(start)}~${fmt(endClamped)}`;
+}
+
 /** ダッシュボード用の週キー一覧（2024年1W〜2027年1W）を返す */
 export function getDashboardWeekRange(): string[] {
   const result: string[] = [];
@@ -261,6 +279,8 @@ export function buildWeeklyOccupancy(stayNights: StayNight[]): WeeklyOccupancyPo
   }
 
   for (const point of map.values()) {
+    // 1週間は7日なので、宿泊日数は最大7にキャップする（複数室・複数予約で合算しても分母7を超えない）
+    point.stayedNights = Math.min(point.stayedNights, 7);
     const raw = point.stayedNights / 7;
     point.occupancy = raw > 1 ? 1 : raw;
   }
