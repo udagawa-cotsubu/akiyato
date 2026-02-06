@@ -153,6 +153,7 @@ export type ImportedReservationSummary = Pick<
   | "nights"
   | "adults"
   | "children"
+  | "infants"
   | "saleAmount"
   | "ratePlan"
   | "status"
@@ -183,6 +184,7 @@ export async function importCsvTexts(
     nights: r.nights,
     adults: r.adults,
     children: r.children,
+    infants: r.infants,
     saleAmount: r.saleAmount,
     ratePlan: r.ratePlan,
     status: r.status,

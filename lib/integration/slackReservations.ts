@@ -46,6 +46,7 @@ function buildSlackText(params: ReservationImportNotificationParams): string {
       const nightsLabel = r.nights != null ? `${r.nights}泊` : "-泊";
       const adults = r.adults ?? 0;
       const children = r.children ?? 0;
+      const infants = r.infants ?? 0;
       const amount =
         r.saleAmount != null ? `¥${r.saleAmount.toLocaleString("ja-JP")}` : "¥0";
       const ratePlan = r.ratePlan ?? "-";
@@ -59,7 +60,7 @@ function buildSlackText(params: ReservationImportNotificationParams): string {
       return [
         `宿名： ${inn} ｜ ${source}`,
         `${dateLinePrefix}${checkIn} → ${checkOut}（${nightsLabel}）`,
-        ` 大人${adults}・子供${children}`,
+        ` 大人${adults}・子供${children}・幼児${infants}`,
         ` ${ratePlan} ｜ ${amount}`,
       ].join("\n");
     };
