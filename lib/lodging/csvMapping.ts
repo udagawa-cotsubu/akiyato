@@ -49,21 +49,23 @@ export function parseCsvText(text: string): string[][] {
   const headerLen = rows[0]?.length ?? 0;
   const sampleLengths = rows.slice(0, 10).map((r) => r.length);
 
-  // #region agent log
-  fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "debug-session",
-      runId: "csv-debug",
-      hypothesisId: "CSV_H1",
-      location: "lib/lodging/csvMapping.ts:parseCsvText",
-      message: "Parsed CSV row lengths (first 10)",
-      data: { headerLen, sampleLengths, totalRows: rows.length },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
+  if (process.env.NODE_ENV !== "production") {
+    // #region agent log
+    fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "debug-session",
+        runId: "csv-debug",
+        hypothesisId: "CSV_H1",
+        location: "lib/lodging/csvMapping.ts:parseCsvText",
+        message: "Parsed CSV row lengths (first 10)",
+        data: { headerLen, sampleLengths, totalRows: rows.length },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
+  }
 
   return rows;
 }
@@ -181,28 +183,30 @@ export function mapCsvToDomain(rows: string[][]): {
     });
   }
 
-  // #region agent log
-  fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      sessionId: "debug-session",
-      runId: "csv-debug",
-      hypothesisId: "CSV_H2",
-      location: "lib/lodging/csvMapping.ts:mapCsvToDomain",
-      message: "Mapped CSV to domain",
-      data: {
-        headerLen: headerRow.length,
-        totalRows: rows.length,
-        dataRows: dataRows.length,
-        innsCount: innsByName.size,
-        reservationsCount: reservations.length,
-        skippedByLength,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion agent log
+  if (process.env.NODE_ENV !== "production") {
+    // #region agent log
+    fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "debug-session",
+        runId: "csv-debug",
+        hypothesisId: "CSV_H2",
+        location: "lib/lodging/csvMapping.ts:mapCsvToDomain",
+        message: "Mapped CSV to domain",
+        data: {
+          headerLen: headerRow.length,
+          totalRows: rows.length,
+          dataRows: dataRows.length,
+          innsCount: innsByName.size,
+          reservationsCount: reservations.length,
+          skippedByLength,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
+  }
 
   return {
     inns: Array.from(innsByName.values()),

@@ -96,25 +96,27 @@ export async function postReservationImportNotification(
   const text = buildSlackText(params);
 
   try {
-    // #region agent log
-    fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "debug-session",
-        runId: "slack-webhook-debug",
-        hypothesisId: "H2_SERVER_PROXY",
-        location: "lib/integration/slackReservations.ts:before-api-call",
-        message: "About to call internal Slack proxy API",
-        data: {
-          hasText: !!text,
-          importSourceType: params.importSourceType,
-          totalCount: params.totalCount,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion agent log
+    if (process.env.NODE_ENV !== "production") {
+      // #region agent log
+      fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "debug-session",
+          runId: "slack-webhook-debug",
+          hypothesisId: "H2_SERVER_PROXY",
+          location: "lib/integration/slackReservations.ts:before-api-call",
+          message: "About to call internal Slack proxy API",
+          data: {
+            hasText: !!text,
+            importSourceType: params.importSourceType,
+            totalCount: params.totalCount,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion agent log
+    }
 
     await fetch("/api/slack/reservations-import", {
       method: "POST",
@@ -124,24 +126,26 @@ export async function postReservationImportNotification(
       body: JSON.stringify({ text }),
     });
   } catch (error) {
-    // #region agent log
-    fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId: "debug-session",
-        runId: "slack-webhook-debug",
-        hypothesisId: "H2_SERVER_PROXY",
-        location: "lib/integration/slackReservations.ts:catch-api-call",
-        message: "Internal Slack proxy API call failed",
-        data: {
-          errorName: error instanceof Error ? error.name : typeof error,
-          errorMessage: error instanceof Error ? error.message : String(error),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion agent log
+    if (process.env.NODE_ENV !== "production") {
+      // #region agent log
+      fetch("http://127.0.0.1:7245/ingest/5124391d-9715-4eee-a097-8c80517c6a00", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "debug-session",
+          runId: "slack-webhook-debug",
+          hypothesisId: "H2_SERVER_PROXY",
+          location: "lib/integration/slackReservations.ts:catch-api-call",
+          message: "Internal Slack proxy API call failed",
+          data: {
+            errorName: error instanceof Error ? error.name : typeof error,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion agent log
+    }
 
     console.error("Failed to call internal Slack reservation import API", error);
   }
