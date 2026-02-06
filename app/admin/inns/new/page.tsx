@@ -27,12 +27,10 @@ export default function InnCreatePage() {
     setSaving(true);
     try {
       await createInn({
-        id: "", // createInn 側で上書きされる
         name: form.name.trim(),
         tag: form.tag.trim() || null,
         address: form.address.trim() || null,
         mapUrl: form.mapUrl.trim() || null,
-        displayName: null,
       });
       toast.success("宿を追加しました");
       router.push("/admin/inns");

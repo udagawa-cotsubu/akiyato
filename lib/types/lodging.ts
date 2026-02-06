@@ -20,6 +20,10 @@ export interface Inn {
   displayName?: string | null;
   /** 宿コード（例: 001） */
   tag?: string | null;
+  /** 住所（任意） */
+  address?: string | null;
+  /** Google Map など地図サービスの URL（任意） */
+  mapUrl?: string | null;
 }
 
 /** 予約（宿泊レコード） */
