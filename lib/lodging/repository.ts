@@ -144,8 +144,25 @@ export async function resetLodgingData(): Promise<void> {
   await db.clearAll();
 }
 
+export type ImportedReservationSummary = Pick<
+  Reservation,
+  | "innName"
+  | "bookingDate"
+  | "checkIn"
+  | "checkOut"
+  | "nights"
+  | "adults"
+  | "children"
+  | "saleAmount"
+  | "ratePlan"
+  | "status"
+  | "source"
+>;
+
 /** ブラウザで読み込んだ CSV テキスト群をドメインオブジェクトとして保存する */
-export async function importCsvTexts(csvTexts: string[]): Promise<void> {
+export async function importCsvTexts(
+  csvTexts: string[],
+): Promise<{ reservationsCount: number; reservationsSummary: ImportedReservationSummary[] }> {
   const reservations: Omit<Reservation, "id">[] = [];
 
   for (const text of csvTexts) {
@@ -154,9 +171,26 @@ export async function importCsvTexts(csvTexts: string[]): Promise<void> {
     reservations.push(...mapped.reservations);
   }
 
-  if (reservations.length === 0) return;
+  if (reservations.length === 0) {
+    return { reservationsCount: 0, reservationsSummary: [] };
+  }
+
+  const summary: ImportedReservationSummary[] = reservations.map((r) => ({
+    innName: r.innName,
+    bookingDate: r.bookingDate,
+    checkIn: r.checkIn,
+    checkOut: r.checkOut,
+    nights: r.nights,
+    adults: r.adults,
+    children: r.children,
+    saleAmount: r.saleAmount,
+    ratePlan: r.ratePlan,
+    status: r.status,
+    source: r.source,
+  }));
 
   await upsertInnsAndReservations({ reservations });
+  return { reservationsCount: reservations.length, reservationsSummary: summary };
 }
 
 
