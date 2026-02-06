@@ -25,6 +25,8 @@ export async function createInn(input: Omit<Inn, "id">): Promise<Inn> {
     name: input.name,
     tag: code,
     displayName: code ? `${code}.${input.name}` : input.name,
+    address: input.address ?? null,
+    mapUrl: input.mapUrl ?? null,
   };
   await db.saveInns([inn]);
   return inn;

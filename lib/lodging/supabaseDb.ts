@@ -16,6 +16,8 @@ type InnRow = {
   name: string;
   display_name: string | null;
   tag: string | null;
+  address: string | null;
+  map_url: string | null;
 };
 
 type ReservationRow = {
@@ -44,6 +46,8 @@ function innToRow(inn: Inn): InnRow {
     name: inn.name,
     display_name: inn.displayName ?? null,
     tag: inn.tag ?? null,
+    address: inn.address ?? null,
+    map_url: inn.mapUrl ?? null,
   };
 }
 
@@ -53,6 +57,8 @@ function rowToInn(row: InnRow): Inn {
     name: row.name,
     displayName: row.display_name ?? undefined,
     tag: row.tag ?? undefined,
+    address: row.address ?? undefined,
+    mapUrl: row.map_url ?? undefined,
   };
 }
 
@@ -105,7 +111,7 @@ export async function getAllInns(): Promise<Inn[]> {
   const supabase = getSupabaseBrowser();
   const { data, error } = await supabase
     .from(TABLE_INNS)
-    .select("id, name, display_name, tag")
+    .select("id, name, display_name, tag, address, map_url")
     .order("display_name", { ascending: true });
   if (error) {
     const pgCode = (error as any).code ?? null;

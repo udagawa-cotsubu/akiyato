@@ -1,23 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { createInn, deleteInn, fetchInns, updateInn } from "@/lib/lodging/repository";
+import { deleteInn, fetchInns } from "@/lib/lodging/repository";
 import type { Inn } from "@/lib/types/lodging";
 import { toast } from "sonner";
 
 export default function InnsAdminPage() {
   const [inns, setInns] = useState<Inn[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [editingInn, setEditingInn] = useState<Inn | null>(null);
-  const [form, setForm] = useState<{ name: string; tag: string }>({
-    name: "",
-    tag: "",
-  });
 
   useEffect(() => {
     let cancelled = false;
@@ -39,53 +33,6 @@ export default function InnsAdminPage() {
     return keyA.localeCompare(keyB, "ja");
   });
 
-  const resetForm = () => {
-    setEditingInn(null);
-    setForm({ name: "", tag: "" });
-  };
-
-  const handleEdit = (inn: Inn) => {
-    setEditingInn(inn);
-    setForm({
-      name: inn.name,
-      tag: inn.tag ?? "",
-    });
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error("本来の名前を入力してください");
-      return;
-    }
-    setSaving(true);
-    try {
-      if (editingInn) {
-        const updated: Inn = {
-          ...editingInn,
-          name: form.name.trim(),
-          tag: form.tag.trim() || null,
-        };
-        await updateInn(updated);
-        setInns((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
-        toast.success("宿を更新しました");
-      } else {
-        const created = await createInn({
-          name: form.name.trim(),
-          tag: form.tag.trim() || null,
-        });
-        setInns((prev) => [...prev, created]);
-        toast.success("宿を追加しました");
-      }
-      resetForm();
-    } catch (error) {
-      console.error(error);
-      toast.error("宿の保存に失敗しました");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleDelete = async (inn: Inn) => {
     if (!window.confirm(`「${inn.name}」を削除しますか？ 予約データとの紐付けも失われる可能性があります。`)) {
       return;
@@ -93,9 +40,6 @@ export default function InnsAdminPage() {
     try {
       await deleteInn(inn.id);
       setInns((prev) => prev.filter((i) => i.id !== inn.id));
-      if (editingInn?.id === inn.id) {
-        resetForm();
-      }
       toast.success("宿を削除しました");
     } catch (error) {
       console.error(error);
@@ -105,62 +49,17 @@ export default function InnsAdminPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold">宿管理</h2>
-        <p className="text-sm text-muted-foreground">
-          Supabase に登録されている宿一覧を管理します。CSV 連携用文字列は「コード.本来の名前」から自動生成されます。
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">宿管理</h2>
+          <p className="text-sm text-muted-foreground">
+            Supabase に登録されている宿一覧です。CSV 連携用文字列は「コード.本来の名前」から自動生成されます。
+          </p>
+        </div>
+        <Link href="/admin/inns/new">
+          <Button>宿を追加</Button>
+        </Link>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{editingInn ? "宿を編集" : "宿を追加"}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-3 md:grid-cols-3 md:items-end" onSubmit={handleSubmit}>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">コード（例: 001）</label>
-              <Input
-                value={form.tag}
-                onChange={(e) => setForm((prev) => ({ ...prev, tag: e.target.value }))}
-                placeholder="001"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">本来の名前</label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Sea Side 椿"
-              />
-            </div>
-            <div className="space-y-1 md:col-span-1">
-              <label className="text-xs font-medium text-muted-foreground">
-                CSV 連携用文字列（自動生成・参考表示）
-              </label>
-              <Input
-                value={
-                  (form.tag.trim()
-                    ? `${form.tag.trim()}.${form.name.trim() || "宿名"}`
-                    : form.name.trim() || "") || ""
-                }
-                readOnly
-                className="bg-muted"
-              />
-            </div>
-            <div className="flex gap-2 md:justify-end md:col-span-3">
-              {editingInn && (
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  新規追加モードに戻る
-                </Button>
-              )}
-              <Button type="submit" disabled={saving}>
-                {editingInn ? "保存" : "追加"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>
@@ -179,7 +78,9 @@ export default function InnsAdminPage() {
                     <TableHead className="w-24">コード</TableHead>
                     <TableHead>本来の名前</TableHead>
                     <TableHead>CSV 連携用文字列</TableHead>
-                    <TableHead className="w-32">操作</TableHead>
+                    <TableHead>住所</TableHead>
+                    <TableHead>Google Map</TableHead>
+                    <TableHead className="w-40">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -190,16 +91,30 @@ export default function InnsAdminPage() {
                       <TableCell className="text-muted-foreground">
                         {inn.displayName ?? (inn.tag ? `${inn.tag}.${inn.name}` : inn.name)}
                       </TableCell>
+                      <TableCell className="text-xs">
+                        {inn.address ?? <span className="text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {inn.mapUrl ? (
+                          <a
+                            href={inn.mapUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary underline"
+                          >
+                            開く
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEdit(inn)}
-                          >
-                            編集
-                          </Button>
+                          <Link href={`/admin/inns/${inn.id}`}>
+                            <Button type="button" size="sm" variant="outline">
+                              編集
+                            </Button>
+                          </Link>
                           <Button
                             type="button"
                             size="sm"
