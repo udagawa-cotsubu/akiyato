@@ -3,7 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboardIcon, MenuIcon, PlugIcon, XIcon, HotelIcon, Building2Icon, ListTodoIcon } from "lucide-react";
+import {
+  LayoutDashboardIcon,
+  MenuIcon,
+  PlugIcon,
+  XIcon,
+  HotelIcon,
+  Building2Icon,
+  ListTodoIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "lucide-react";
 
 const navItems = [
   { href: "/admin/judgements", label: "判定結果管理", icon: LayoutDashboardIcon },
@@ -16,6 +26,7 @@ const navItems = [
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -93,37 +104,55 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </>
       )}
 
-      {/* デスクトップ: サイドバー */}
-      <aside className="hidden w-56 shrink-0 border-r bg-muted/30 md:block">
-        <div className="sticky top-0 flex h-screen flex-col p-4">
-          <header className="mb-6">
-            <Link href="/admin" className="cursor-pointer text-lg font-semibold">
-              管理画面
-            </Link>
+      {/* デスクトップ: サイドバー（折りたたみ可能） */}
+      <aside
+        className={`hidden shrink-0 border-r bg-muted/30 md:block transition-[width] duration-300 ${
+          sidebarCollapsed ? "w-16" : "w-56"
+        }`}
+      >
+        <div className="sticky top-0 flex h-screen flex-col p-2">
+          <header className="mb-4 flex items-center justify-between">
+            {!sidebarCollapsed && (
+              <Link href="/admin" className="cursor-pointer px-2 text-lg font-semibold">
+                管理画面
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              className="ml-auto flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+              aria-label={sidebarCollapsed ? "サイドバーを展開" : "サイドバーを折りたたむ"}
+            >
+              {sidebarCollapsed ? (
+                <ChevronRightIcon className="size-4" />
+              ) : (
+                <ChevronLeftIcon className="size-4" />
+              )}
+            </button>
           </header>
           <nav className="flex flex-1 flex-col gap-1">
             {navItems.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
-                className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
+                className={`cursor-pointer flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors hover:bg-muted ${
                   pathname === href || pathname.startsWith(href) ? "bg-muted" : ""
                 }`}
               >
                 <Icon className="size-4" />
-                {label}
+                {!sidebarCollapsed && <span className="ml-2">{label}</span>}
               </Link>
             ))}
           </nav>
           <footer className="border-t pt-4 flex flex-col gap-2">
             <Link
               href="/admin/api-check"
-              className={`cursor-pointer flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted ${
+              className={`cursor-pointer flex items-center rounded-md px-2 py-2 text-sm font-medium transition-colors hover:bg-muted ${
                 pathname === "/admin/api-check" ? "bg-muted" : "text-muted-foreground"
               }`}
             >
               <PlugIcon className="size-4" />
-              API接続チェック
+              {!sidebarCollapsed && <span className="ml-2">API接続チェック</span>}
             </Link>
           </footer>
         </div>

@@ -85,6 +85,11 @@ function reservationToRow(r: Reservation): ReservationRow {
 }
 
 function rowToReservation(row: ReservationRow): Reservation {
+  const rawSale = row.sale_amount;
+  const saleAmount =
+    rawSale != null ? (typeof rawSale === "number" ? rawSale : Number(rawSale)) : null;
+  const saleAmountNormalized =
+    saleAmount != null && !Number.isNaN(saleAmount) ? saleAmount : null;
   return {
     id: row.id,
     innId: row.inn_id,
@@ -100,7 +105,7 @@ function rowToReservation(row: ReservationRow): Reservation {
     infants: row.infants ?? null,
     nationality: row.nationality ?? null,
     bookingDate: row.booking_date ?? null,
-    saleAmount: row.sale_amount ?? null,
+    saleAmount: saleAmountNormalized,
     status: row.status ?? null,
     ratePlan: row.rate_plan ?? null,
   };
@@ -207,37 +212,62 @@ export async function saveInns(inns: Inn[]): Promise<void> {
   }
 }
 
-/** 予約をまとめて保存（同じ ID は上書き） */
+/** 予約をまとめて保存（同じ airhost_reservation_id は上書き、なければ追加） */
 export async function saveReservations(reservations: Reservation[]): Promise<void> {
   if (reservations.length === 0) return;
   const supabase = getSupabaseBrowser();
   const rows = reservations.map(reservationToRow);
-  const { error } = await supabase.from(TABLE_RESERVATIONS).upsert(rows, { onConflict: "id" });
+  const { error } = await supabase
+    .from(TABLE_RESERVATIONS)
+    .upsert(rows, { onConflict: "airhost_reservation_id" });
   if (error) throw new Error(`予約の保存に失敗しました: ${error.message}`);
 }
 
-/** 全予約 or 簡易フィルタ付きで取得 */
-export async function getReservations(filter?: ReservationFilter): Promise<Reservation[]> {
+const RESERVATIONS_PAGE_SIZE = 1000;
+
+/** 全予約 or 簡易フィルタ付きで取得。options.fetchAll が true のときは1000件ずつページネーションして全件取得する */
+export async function getReservations(
+  filter?: ReservationFilter,
+  options?: { maxRows?: number; fetchAll?: boolean },
+): Promise<Reservation[]> {
   const supabase = getSupabaseBrowser();
-  let query = supabase.from(TABLE_RESERVATIONS).select("*");
 
-  if (filter?.innId) {
-    query = query.eq("inn_id", filter.innId);
-  }
-  if (filter?.source) {
-    query = query.eq("source", filter.source);
-  }
-  if (filter?.checkInFrom) {
-    query = query.gte("check_in", filter.checkInFrom);
-  }
-  if (filter?.checkInTo) {
-    query = query.lte("check_in", filter.checkInTo);
-  }
+  const buildQuery = () => {
+    let q = supabase.from(TABLE_RESERVATIONS).select("*");
+    if (filter?.innId) q = q.eq("inn_id", filter.innId);
+    if (filter?.source) q = q.eq("source", filter.source);
+    if (filter?.checkInFrom) q = q.gte("check_in", filter.checkInFrom);
+    if (filter?.checkInTo) q = q.lte("check_in", filter.checkInTo);
+    return q;
+  };
 
-  const { data, error } = await query;
-  if (error) throw new Error(`予約一覧の取得に失敗しました: ${error.message}`);
+  const fetchPage = async (from: number, to: number) => {
+    const { data, error } = await buildQuery().range(from, to);
+    if (error) throw new Error(`予約一覧の取得に失敗しました: ${error.message}`);
+    return (data ?? []).map((row) => rowToReservation(row as ReservationRow));
+  };
 
-  let list = (data ?? []).map((row) => rowToReservation(row as ReservationRow));
+  let list: Reservation[];
+
+  if (options?.fetchAll || (options?.maxRows != null && options.maxRows > RESERVATIONS_PAGE_SIZE)) {
+    list = [];
+    const limit = options?.maxRows ?? 100000;
+    let offset = 0;
+    while (true) {
+      const end = Math.min(offset + RESERVATIONS_PAGE_SIZE - 1, limit - 1);
+      const page = await fetchPage(offset, end);
+      list.push(...page);
+      if (page.length < RESERVATIONS_PAGE_SIZE || list.length >= limit) break;
+      offset += RESERVATIONS_PAGE_SIZE;
+    }
+  } else {
+    const max = options?.maxRows;
+    const { data, error } = await (max != null && max > 0
+      ? buildQuery().range(0, max - 1)
+      : buildQuery());
+    if (error) throw new Error(`予約一覧の取得に失敗しました: ${error.message}`);
+    list = (data ?? []).map((row) => rowToReservation(row as ReservationRow));
+  }
 
   if (filter?.searchText) {
     const text = filter.searchText.toLowerCase().trim();

@@ -59,7 +59,7 @@ export async function upsertInnsAndReservations(params: {
 }): Promise<void> {
   const [existingInns, existingReservations] = await Promise.all([
     db.getAllInns(),
-    db.getReservations(),
+    db.getReservations(undefined, { fetchAll: true }),
   ]);
 
   // --- 宿（Inn）の解決 ---
@@ -72,12 +72,16 @@ export async function upsertInnsAndReservations(params: {
   });
 
   // --- 予約（Reservation）の正規化 ---
-  // AirHost予約ID 単位で1レコードにしたいので、既存分をマップ化しておく
+  // airhost_reservation_id で既存を探し、一致すれば上書き・なければ追加（キーは正規化して突き合わせ）
+  const airhostIdKey = (v: string | null | undefined): string | null => {
+    if (v == null || v === "") return null;
+    const s = String(v).trim();
+    return s === "" ? null : s;
+  };
   const reservationByAirhostId = new Map<string, Reservation>();
   existingReservations.forEach((r) => {
-    if (r.airhostReservationId) {
-      reservationByAirhostId.set(r.airhostReservationId, r);
-    }
+    const key = airhostIdKey(r.airhostReservationId);
+    if (key != null) reservationByAirhostId.set(key, r);
   });
 
   const normalizedReservations: Reservation[] = [];
@@ -85,7 +89,8 @@ export async function upsertInnsAndReservations(params: {
 
   for (const r of params.reservations) {
     const base = r as Reservation | Omit<Reservation, "id">;
-    const airId = base.airhostReservationId;
+    const airIdRaw = base.airhostReservationId;
+    const airId = airhostIdKey(airIdRaw);
 
     let id: string;
     if (airId && reservationByAirhostId.has(airId)) {
@@ -158,11 +163,13 @@ export type ImportedReservationSummary = Pick<
   | "ratePlan"
   | "status"
   | "source"
+  | "airhostReservationId"
 >;
 
 /** ブラウザで読み込んだ CSV テキスト群をドメインオブジェクトとして保存する */
 export async function importCsvTexts(
   csvTexts: string[],
+  options?: { importSourceType?: "checkin" | "reservation" | "cancel" },
 ): Promise<{ reservationsCount: number; reservationsSummary: ImportedReservationSummary[] }> {
   const reservations: Omit<Reservation, "id">[] = [];
 
@@ -176,22 +183,74 @@ export async function importCsvTexts(
     return { reservationsCount: 0, reservationsSummary: [] };
   }
 
-  const summary: ImportedReservationSummary[] = reservations.map((r) => ({
-    innName: r.innName,
-    bookingDate: r.bookingDate,
-    checkIn: r.checkIn,
-    checkOut: r.checkOut,
-    nights: r.nights,
-    adults: r.adults,
-    children: r.children,
-    infants: r.infants,
-    saleAmount: r.saleAmount,
-    ratePlan: r.ratePlan,
-    status: r.status,
-    source: r.source,
-  }));
+  const airhostIdKeyForLookup = (v: string | null | undefined): string | null => {
+    if (v == null || v === "") return null;
+    const s = String(v).trim();
+    return s === "" ? null : s;
+  };
 
-  await upsertInnsAndReservations({ reservations });
+  let existingByAirhostId: Map<string, Reservation> | undefined;
+
+  if (options?.importSourceType === "cancel") {
+    // キャンセル突き合わせ用に全件取得（1000件ずつページネーション）
+    const existingReservations = await db.getReservations(undefined, {
+      fetchAll: true,
+    });
+    existingByAirhostId = new Map();
+    existingReservations.forEach((r) => {
+      const key = airhostIdKeyForLookup(r.airhostReservationId);
+      if (key != null) {
+        existingByAirhostId!.set(key, r);
+      }
+    });
+  }
+
+  const summary: ImportedReservationSummary[] = reservations.map((r) => {
+    const lookupKey = airhostIdKeyForLookup(r.airhostReservationId);
+    const existing =
+      existingByAirhostId && lookupKey != null
+        ? existingByAirhostId.get(lookupKey)
+        : undefined;
+
+    // キャンセル時は通知用に「既存予約の販売金額 × -1」を表示（同じデータ＝上書き対象の金額）
+    let baseSaleAmount: number | null;
+    if (options?.importSourceType === "cancel") {
+      const raw = existing?.saleAmount;
+      baseSaleAmount = raw != null ? Number(raw) : null;
+      if (baseSaleAmount !== null && Number.isNaN(baseSaleAmount)) baseSaleAmount = null;
+    } else {
+      baseSaleAmount = r.saleAmount ?? null;
+    }
+
+    const saleAmountForNotification =
+      options?.importSourceType === "cancel" && baseSaleAmount != null
+        ? baseSaleAmount * -1
+        : baseSaleAmount;
+
+    return {
+      innName: r.innName,
+      bookingDate: r.bookingDate,
+      checkIn: r.checkIn,
+      checkOut: r.checkOut,
+      nights: r.nights,
+      adults: r.adults,
+      children: r.children,
+      infants: r.infants,
+      saleAmount: saleAmountForNotification,
+      ratePlan: r.ratePlan,
+      status: r.status,
+      source: r.source,
+      airhostReservationId: r.airhostReservationId,
+    };
+  });
+
+  // キャンセル取り込み時はDBには販売金額 0 で保存する（通知には上記で既存金額×-1を出している）
+  const reservationsForSave: (Omit<Reservation, "id"> | Reservation)[] =
+    options?.importSourceType === "cancel"
+      ? reservations.map((r) => ({ ...r, saleAmount: 0 }))
+      : reservations;
+
+  await upsertInnsAndReservations({ reservations: reservationsForSave });
   return { reservationsCount: reservations.length, reservationsSummary: summary };
 }
 

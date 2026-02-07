@@ -54,7 +54,9 @@ export default function LodgingImportPage() {
         return;
       }
 
-      const { reservationsCount, reservationsSummary } = await importCsvTexts(texts);
+      const { reservationsCount, reservationsSummary } = await importCsvTexts(texts, {
+        importSourceType: sourceType,
+      });
       const [innList, reservationList] = await Promise.all([fetchInns(), fetchReservations()]);
       setInns(innList);
       setReservations(reservationList);
