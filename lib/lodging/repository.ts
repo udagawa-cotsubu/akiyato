@@ -48,9 +48,9 @@ export async function deleteInn(id: string): Promise<void> {
   await db.deleteInn(id);
 }
 
-/** 条件付きで予約一覧を取得 */
+/** 条件付きで予約一覧を取得（ダッシュボード・一覧用に全件取得。Supabase はデフォルト1000件のため fetchAll でページネーション） */
 export async function fetchReservations(filter?: ReservationFilter): Promise<Reservation[]> {
-  return db.getReservations(filter);
+  return db.getReservations(filter, { fetchAll: true });
 }
 
 /** 宿・予約を一括保存（ID がないものには UUID を付与） */
