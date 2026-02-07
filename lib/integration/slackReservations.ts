@@ -42,7 +42,7 @@ function buildSlackText(params: ReservationImportNotificationParams): string {
     };
 
     const formatLine = (r: ImportedReservationSummary, opts?: { withEmojiDate?: boolean }): string => {
-      const withEmojiDate = opts?.withEmojiDate ?? false;
+      const withEmojiDate = opts?.withEmojiDate ?? true;
       const nightsLabel = r.nights != null ? `${r.nights}泊` : "-泊";
       const adults = r.adults ?? 0;
       const children = r.children ?? 0;
@@ -66,23 +66,18 @@ function buildSlackText(params: ReservationImportNotificationParams): string {
     };
 
     if (active.length > 0) {
-      lines.push("");
       lines.push(`:pencil2:予約一覧（${active.length}件）`);
       active.forEach((r, index) => {
-        if (index > 0) {
-          lines.push("────────────────────");
-        }
+        if (index > 0) lines.push("────────────────────");
         lines.push(formatLine(r, { withEmojiDate: true }));
       });
     }
 
     if (canceled.length > 0) {
-      lines.push("");
+      if (lines.length > 0) lines.push("");
       lines.push(`:heavy_multiplication_x:キャンセル一覧（${canceled.length}件）`);
       canceled.forEach((r, index) => {
-        if (index > 0) {
-          lines.push("────────────────────");
-        }
+        if (index > 0) lines.push("────────────────────");
         lines.push(formatLine(r, { withEmojiDate: true }));
       });
     }
@@ -96,28 +91,15 @@ export async function postReservationImportNotification(
 ): Promise<void> {
   const text = buildSlackText(params);
 
-  try {
-    // 一旦 Slack には送らず、ブラウザ / サーバのコンソールに出して内容を確認できるようにする
-    if (typeof window !== "undefined") {
-      // ブラウザコンソール
-      // eslint-disable-next-line no-console
-      console.log("[ReservationImport][MockSlackNotification][browser]", {
-        importSourceType: params.importSourceType,
-        totalCount: params.totalCount,
-        text,
-      });
-    } else {
-      // サーバー側
-      // eslint-disable-next-line no-console
-      console.log("[ReservationImport][MockSlackNotification][server]", {
-        importSourceType: params.importSourceType,
-        totalCount: params.totalCount,
-        text,
-      });
-    }
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error("[ReservationImport][MockSlackNotification] Failed to log notification", error);
+  const base = typeof window !== "undefined" ? window.location.origin : "";
+  const res = await fetch(`${base}/api/slack/reservations-import`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err?.error ?? `Slack 通知に失敗しました (${res.status})`);
   }
 }
 

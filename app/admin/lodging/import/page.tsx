@@ -63,11 +63,16 @@ export default function LodgingImportPage() {
       toast.success(`${texts.length} 件の CSV を取り込みました`);
 
       if (sourceType === "reservation" || sourceType === "cancel") {
-        void postReservationImportNotification({
-          importSourceType: sourceType,
-          totalCount: reservationsCount,
-          reservations: reservationsSummary,
-        });
+        try {
+          await postReservationImportNotification({
+            importSourceType: sourceType,
+            totalCount: reservationsCount,
+            reservations: reservationsSummary,
+          });
+        } catch (e) {
+          console.error("[ReservationImport] Slack 通知エラー", e);
+          toast.error("Slack への通知に失敗しました");
+        }
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "CSV の取り込みに失敗しました";
