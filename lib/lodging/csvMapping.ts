@@ -129,7 +129,7 @@ export function mapCsvToDomain(rows: string[][]): {
   };
 
   const innsByName = new Map<string, Omit<Inn, "id">>();
-  const reservations: Omit<Reservation, "id">[] = [];
+  const reservations: ReservationWithGuestNameForNotification[] = [];
 
   let skippedByLength = 0;
 
