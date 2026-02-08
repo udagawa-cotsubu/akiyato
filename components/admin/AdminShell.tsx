@@ -19,7 +19,7 @@ const navItems = [
   { href: "/admin/judgements", label: "判定結果管理", icon: LayoutDashboardIcon },
   { href: "/admin/inns", label: "宿管理", icon: Building2Icon },
   { href: "/admin/lodging/import", label: "予約インポート", icon: HotelIcon },
-  { href: "/admin/lodging/dashboard", label: "ダッシュボード", icon: LayoutDashboardIcon },
+  { href: "/admin/lodging/dashboard", label: "レポート", icon: LayoutDashboardIcon },
   { href: "/admin/lodging/todos", label: "TODO管理", icon: ListTodoIcon },
 ] as const;
 
