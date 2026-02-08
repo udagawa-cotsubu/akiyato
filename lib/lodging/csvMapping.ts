@@ -70,10 +70,15 @@ export function parseCsvText(text: string): string[][] {
   return rows;
 }
 
+/** 通知用にのみ使うゲスト名（DBには保存しない） */
+export type ReservationWithGuestNameForNotification = Omit<Reservation, "id"> & {
+  guestNameForNotification?: string | null;
+};
+
 /** CSV 1枚分を Inn / Reservation 配列に変換する */
 export function mapCsvToDomain(rows: string[][]): {
   inns: Omit<Inn, "id">[];
-  reservations: Omit<Reservation, "id">[];
+  reservations: ReservationWithGuestNameForNotification[];
 } {
   if (rows.length <= 1) {
     return { inns: [], reservations: [] };
@@ -162,6 +167,7 @@ export function mapCsvToDomain(rows: string[][]): {
     const saleAmount = toNumber(get(row, "販売"));
     const ratePlan = get(row, "料金プラン");
     const status = normalizeStatus(get(row, "状態"));
+    const guestNameForNotification = get(row, "ゲスト名") ?? get(row, "宿泊者名") ?? null;
 
     reservations.push({
       innId: "",
@@ -180,6 +186,7 @@ export function mapCsvToDomain(rows: string[][]): {
       saleAmount,
       status,
       ratePlan,
+      guestNameForNotification: guestNameForNotification || undefined,
     });
   }
 

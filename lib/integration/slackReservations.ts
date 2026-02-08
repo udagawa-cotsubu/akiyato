@@ -57,12 +57,16 @@ function buildSlackText(params: ReservationImportNotificationParams): string {
 
       const dateLinePrefix = withEmojiDate ? ":date: " : "";
 
-      return [
-        `宿名： ${inn} ｜ ${source}`,
+      const lineParts = [`宿名： ${inn} ｜ ${source}`];
+      if (r.guestName?.trim()) {
+        lineParts.push(`:bust_in_silhouette: ${r.guestName.trim()}`);
+      }
+      lineParts.push(
         `${dateLinePrefix}${checkIn} → ${checkOut}（${nightsLabel}）`,
         ` 大人${adults}・子供${children}・幼児${infants}`,
         ` ${ratePlan} ｜ ${amount}`,
-      ].join("\n");
+      );
+      return lineParts.join("\n");
     };
 
     if (active.length > 0) {

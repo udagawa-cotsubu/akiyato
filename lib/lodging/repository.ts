@@ -164,14 +164,17 @@ export type ImportedReservationSummary = Pick<
   | "status"
   | "source"
   | "airhostReservationId"
->;
+> & {
+  /** 通知用のみ（DBには保存しない）。CSV の「ゲスト名」または「宿泊者名」 */
+  guestName?: string | null;
+};
 
 /** ブラウザで読み込んだ CSV テキスト群をドメインオブジェクトとして保存する */
 export async function importCsvTexts(
   csvTexts: string[],
   options?: { importSourceType?: "checkin" | "reservation" | "cancel" },
 ): Promise<{ reservationsCount: number; reservationsSummary: ImportedReservationSummary[] }> {
-  const reservations: Omit<Reservation, "id">[] = [];
+  const reservations: (Omit<Reservation, "id"> & { guestNameForNotification?: string | null })[] = [];
 
   for (const text of csvTexts) {
     const rows = parseCsvText(text);
@@ -227,6 +230,9 @@ export async function importCsvTexts(
         ? baseSaleAmount * -1
         : baseSaleAmount;
 
+    const guestNameForNotification =
+      "guestNameForNotification" in r ? (r as { guestNameForNotification?: string | null }).guestNameForNotification : undefined;
+
     return {
       innName: r.innName,
       bookingDate: r.bookingDate,
@@ -241,6 +247,7 @@ export async function importCsvTexts(
       status: r.status,
       source: r.source,
       airhostReservationId: r.airhostReservationId,
+      guestName: guestNameForNotification ?? undefined,
     };
   });
 
